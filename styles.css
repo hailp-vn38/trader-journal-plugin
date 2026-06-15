@@ -1,8 +1,57 @@
-/*
+.trader-journal-modal {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.trader-journal-modal h2,
+.trader-journal-settings h2 {
+	margin: 0 0 12px;
+}
 
-If your plugin does not need CSS, delete this file.
+.trader-journal-modal p {
+	margin: 0;
+	color: var(--text-muted);
+}
 
-*/
+.trader-journal-settings {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.trader-journal-setting {
+	display: grid;
+	grid-template-columns: minmax(160px, 1fr) minmax(220px, 2fr);
+	gap: 4px 16px;
+	align-items: center;
+	border-top: 1px solid var(--background-modifier-border);
+	padding: 16px 0;
+}
+
+.trader-journal-setting__label {
+	font-weight: 600;
+}
+
+.trader-journal-setting__description {
+	grid-column: 1;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-setting input {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	width: 100%;
+}
+
+@media (max-width: 520px) {
+	.trader-journal-setting {
+		grid-template-columns: 1fr;
+	}
+
+	.trader-journal-setting input {
+		grid-column: 1;
+		grid-row: auto;
+	}
+}
