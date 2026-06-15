@@ -1,0 +1,35 @@
+export const TRADE_CODE_BLOCK_LANGUAGE = 'trader-journal-trade';
+
+export type TradeResult = 'loss' | 'win' | 'breakeven';
+export type TradeSide = 'long' | 'short';
+export type TradeImageType = 'url' | 'file';
+
+export interface TradeImage {
+	type?: TradeImageType;
+	value?: string;
+	label?: string;
+}
+
+export interface TradeEntry {
+	schemaVersion?: number;
+	id?: string;
+	symbol?: string;
+	side?: TradeSide;
+	setup?: string;
+	timeframe?: string;
+	result?: TradeResult;
+	rr?: number | string;
+	tags?: string[] | string;
+	images?: Array<TradeImage | string> | string;
+	notes?: string;
+	opened_at?: string;
+	closed_at?: string;
+	holding_time?: number | string | null;
+	[key: string]: unknown;
+}
+
+export interface NormalizedTradeImage {
+	type: TradeImageType;
+	value: string;
+	label?: string;
+}
