@@ -1,4 +1,4 @@
-import { normalizePath, TFile } from 'obsidian';
+import { MarkdownRenderChild, Modal, normalizePath, TFile } from 'obsidian';
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import {
@@ -48,7 +48,7 @@ function renderTradeBlock(
 	renderHeader(cardEl, trade);
 	renderDetails(cardEl, trade);
 	renderTags(cardEl, trade);
-	renderImages(plugin, cardEl, trade, ctx.sourcePath);
+	renderImages(plugin, cardEl, trade, ctx);
 	renderNotes(cardEl, trade);
 	renderExtraFields(cardEl, trade);
 }
@@ -57,7 +57,7 @@ function renderTradeError(el: HTMLElement, message: string): void {
 	const errorEl = el.createDiv({ cls: 'trader-journal-trade-error' });
 	errorEl.createDiv({
 		cls: 'trader-journal-trade-error__title',
-		text: 'Invalid trader journal trade block',
+		text: 'Invalid Trader Journal trade block',
 	});
 	errorEl.createEl('code', { text: message });
 }
@@ -130,7 +130,7 @@ function renderImages(
 	plugin: TraderJournalPlugin,
 	parentEl: HTMLElement,
 	trade: TradeEntry,
-	sourcePath: string,
+	ctx: MarkdownPostProcessorContext,
 ): void {
 	const images = normalizeTradeImages(trade.images);
 	if (images.length === 0) {
@@ -145,7 +145,7 @@ function renderImages(
 
 	const imageGridEl = sectionEl.createDiv({ cls: 'trader-journal-trade-images' });
 	images.forEach((image, index) => {
-		renderImage(plugin, imageGridEl, image, sourcePath, index);
+		renderImage(plugin, imageGridEl, image, ctx, index);
 	});
 }
 
@@ -153,26 +153,93 @@ function renderImage(
 	plugin: TraderJournalPlugin,
 	parentEl: HTMLElement,
 	image: NormalizedTradeImage,
-	sourcePath: string,
+	ctx: MarkdownPostProcessorContext,
 	index: number,
 ): void {
 	const figureEl = parentEl.createEl('figure', { cls: 'trader-journal-trade-image' });
-	const source = resolveImageSource(plugin, image, sourcePath);
+	const source = resolveImageSource(plugin, image, ctx.sourcePath);
 	const label = image.label ?? image.value;
 
 	if (source) {
-		figureEl.createEl('img', {
+		const imageButtonEl = figureEl.createDiv({
+			cls: 'trader-journal-trade-image-button',
+			attr: {
+				role: 'button',
+				tabindex: '0',
+				'aria-label': `Open ${label || `trade image ${index + 1}`}`,
+			},
+		});
+		imageButtonEl.createEl('img', {
 			attr: {
 				src: source,
 				alt: label || `Trade image ${index + 1}`,
 				loading: 'lazy',
 			},
 		});
+
+		const child = new MarkdownRenderChild(imageButtonEl);
+		child.registerDomEvent(imageButtonEl, 'click', () => {
+			new TradeImageModal(plugin, source, label || `Trade image ${index + 1}`).open();
+		});
+		child.registerDomEvent(imageButtonEl, 'keydown', (event) => {
+			if (event.key !== 'Enter' && event.key !== ' ') {
+				return;
+			}
+
+			event.preventDefault();
+			new TradeImageModal(plugin, source, label || `Trade image ${index + 1}`).open();
+		});
+		ctx.addChild(child);
 	} else {
 		figureEl.createDiv({
 			cls: 'trader-journal-trade-image__missing',
 			text: 'Image file not found',
 		});
+	}
+}
+
+class TradeImageModal extends Modal {
+	private readonly source: string;
+	private readonly label: string;
+
+	constructor(plugin: TraderJournalPlugin, source: string, label: string) {
+		super(plugin.app);
+		this.source = source;
+		this.label = label;
+	}
+
+	onOpen(): void {
+		this.containerEl.addClass('trader-journal-image-modal-container');
+		this.modalEl.addClass('trader-journal-image-modal-shell');
+		this.titleEl.addClass('trader-journal-image-modal-title');
+		this.titleEl.empty();
+		this.contentEl.addClass('trader-journal-image-modal-content');
+		this.contentEl.empty();
+
+		const closeButtonEl = this.contentEl.createEl('button', {
+			cls: 'trader-journal-image-modal-close',
+			text: 'X',
+			attr: {
+				type: 'button',
+				'aria-label': 'Close image preview',
+			},
+		});
+		closeButtonEl.addEventListener('click', () => this.close());
+
+		this.contentEl.createEl('img', {
+			attr: {
+				src: this.source,
+				alt: this.label,
+			},
+		});
+	}
+
+	onClose(): void {
+		this.containerEl.removeClass('trader-journal-image-modal-container');
+		this.modalEl.removeClass('trader-journal-image-modal-shell');
+		this.titleEl.removeClass('trader-journal-image-modal-title');
+		this.contentEl.removeClass('trader-journal-image-modal-content');
+		this.contentEl.empty();
 	}
 }
 

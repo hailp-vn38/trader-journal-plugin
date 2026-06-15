@@ -3,6 +3,7 @@ import { registerCommands } from './commands';
 import { normalizeSettings, TraderJournalSettings } from './settings';
 import { TraderJournalSettingTab } from './ui/SettingsTab';
 import { TraderJournalModal } from './ui/TraderJournalModal';
+import { registerAutoStatsRebuild } from './trades/autoRebuild';
 import { registerTradeBlockProcessor } from './trades/tradeBlockProcessor';
 
 export default class TraderJournalPlugin extends Plugin {
@@ -19,6 +20,7 @@ export default class TraderJournalPlugin extends Plugin {
 		statusBarItemEl.setText('Trader journal');
 
 		registerCommands(this);
+		registerAutoStatsRebuild(this);
 		registerTradeBlockProcessor(this);
 		this.addSettingTab(new TraderJournalSettingTab(this.app, this));
 	}

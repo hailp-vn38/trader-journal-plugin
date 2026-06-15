@@ -1,8 +1,8 @@
 import type { App } from 'obsidian';
-import { Modal, Notice, TFile, normalizePath } from 'obsidian';
+import { Modal, Notice, TFile, TFolder, normalizePath } from 'obsidian';
 import { StrictMode, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { ChangeEvent, KeyboardEvent, SyntheticEvent } from 'react';
+import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent, SyntheticEvent } from 'react';
 import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
 import { normalizeSymbol } from '../settings';
@@ -61,6 +61,7 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 	const [imageInput, setImageInput] = useState('');
 	const [error, setError] = useState('');
 	const [isSaving, setIsSaving] = useState(false);
+	const [isPastingImage, setIsPastingImage] = useState(false);
 
 	const holdingTime = useMemo(() => calculateHoldingTime(form.openedAt, form.closedAt), [form.openedAt, form.closedAt]);
 
@@ -70,6 +71,18 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 			[field]: value,
 		}));
 	}
+
+	const addImages = (images: TradeImage[]) => {
+		setForm((currentForm) => {
+			const existingImageValues = new Set(currentForm.images.map((image) => image.value).filter(Boolean));
+			const nextImages = images.filter((image) => image.value && !existingImageValues.has(image.value));
+
+			return {
+				...currentForm,
+				images: [...currentForm.images, ...nextImages],
+			};
+		});
+	};
 
 	const addImage = () => {
 		const image = createTradeImage(imageInput);
@@ -82,7 +95,7 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 			return;
 		}
 
-		updateField('images', [...form.images, image]);
+		addImages([image]);
 		setImageInput('');
 	};
 
@@ -102,9 +115,35 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 		addImage();
 	};
 
+	const handleImagePaste = (event: ReactClipboardEvent<HTMLInputElement>) => {
+		const imageFiles = getClipboardImageFiles(event.clipboardData);
+		if (imageFiles.length === 0) {
+			return;
+		}
+
+		event.preventDefault();
+		void savePastedImages(imageFiles);
+	};
+
+	const savePastedImages = async (imageFiles: File[]) => {
+		try {
+			setIsPastingImage(true);
+			setError('');
+			const savedImages = await Promise.all(
+				imageFiles.map((imageFile) => savePastedImage(plugin, imageFile, form.symbol)),
+			);
+			addImages(savedImages);
+			setImageInput('');
+		} catch (pasteError) {
+			setError(pasteError instanceof Error ? pasteError.message : 'Could not paste image.');
+		} finally {
+			setIsPastingImage(false);
+		}
+	};
+
 	const handleSubmit = (event: SyntheticEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (isSaving) {
+		if (isSaving || isPastingImage) {
 			return;
 		}
 
@@ -289,9 +328,11 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 				<input
 					type="text"
 					value={imageInput}
-					placeholder="Paste image link or file path, then press Enter"
+					placeholder={isPastingImage ? 'Saving pasted image...' : 'Paste image, link, or file path'}
 					onChange={(event: ChangeEvent<HTMLInputElement>) => setImageInput(event.target.value)}
 					onKeyDown={handleImageInputKeyDown}
+					onPaste={handleImagePaste}
+					disabled={isPastingImage}
 				/>
 				{form.images.length > 0 ? (
 					<div className="trader-journal-image-preview-row">
@@ -322,10 +363,10 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 			</label>
 
 			<div className="trader-journal-form__actions">
-				<button type="button" onClick={closeModal} disabled={isSaving}>
+				<button type="button" onClick={closeModal} disabled={isSaving || isPastingImage}>
 					Cancel
 				</button>
-				<button type="submit" className="mod-cta" disabled={isSaving}>
+				<button type="submit" className="mod-cta" disabled={isSaving || isPastingImage}>
 					{isSaving ? 'Saving...' : 'Save trade'}
 				</button>
 			</div>
@@ -343,7 +384,7 @@ export class TraderJournalModal extends Modal {
 	}
 
 	onOpen() {
-		this.setTitle('Trader journal');
+		this.titleEl.empty();
 		this.modalEl.addClass('trader-journal-modal-shell');
 		this.contentEl.addClass('trader-journal-modal-content');
 		this.contentEl.empty();
@@ -410,6 +451,135 @@ function createTradeImage(value: string): TradeImage | null {
 		type: /^https?:\/\//i.test(imageValue) ? 'url' : 'file',
 		value: imageValue,
 	};
+}
+
+function getClipboardImageFiles(clipboardData: DataTransfer): File[] {
+	const imageFiles = [
+		...Array.from(clipboardData.files).filter(isImageFile),
+		...Array.from(clipboardData.items)
+			.filter((item) => item.kind === 'file')
+			.map((item) => item.getAsFile())
+			.filter((file): file is File => file !== null && isImageFile(file)),
+	];
+	const seenKeys = new Set<string>();
+
+	return imageFiles.filter((file) => {
+		const key = `${file.name}-${file.type}-${file.size}-${file.lastModified}`;
+		if (seenKeys.has(key)) {
+			return false;
+		}
+
+		seenKeys.add(key);
+		return true;
+	});
+}
+
+function isImageFile(file: File): boolean {
+	return file.type.startsWith('image/');
+}
+
+async function savePastedImage(
+	plugin: TraderJournalPlugin,
+	imageFile: File,
+	symbol: string,
+): Promise<TradeImage> {
+	const attachmentFolder = getAttachmentFolder(plugin);
+	await ensureVaultFolder(plugin, attachmentFolder);
+
+	const attachmentPath = getUniqueAttachmentPath(plugin, attachmentFolder, imageFile, symbol);
+	await plugin.app.vault.createBinary(attachmentPath, await imageFile.arrayBuffer());
+
+	return {
+		type: 'file',
+		value: attachmentPath,
+	};
+}
+
+function getAttachmentFolder(plugin: TraderJournalPlugin): string {
+	const journalFolder = normalizePath(plugin.settings.journalFolder).replace(/\/$/, '');
+	return normalizePath(`${journalFolder}/_attachments`);
+}
+
+async function ensureVaultFolder(plugin: TraderJournalPlugin, folderPath: string): Promise<void> {
+	let currentPath = '';
+
+	for (const segment of normalizePath(folderPath).split('/')) {
+		currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+		const abstractFile = plugin.app.vault.getAbstractFileByPath(currentPath);
+
+		if (abstractFile instanceof TFolder) {
+			continue;
+		}
+
+		if (abstractFile instanceof TFile) {
+			throw new Error(`${currentPath} is a file, not a folder.`);
+		}
+
+		await plugin.app.vault.createFolder(currentPath);
+	}
+}
+
+function getUniqueAttachmentPath(
+	plugin: TraderJournalPlugin,
+	attachmentFolder: string,
+	imageFile: File,
+	symbol: string,
+): string {
+	const baseName = createAttachmentBaseName(symbol);
+	const extension = getImageFileExtension(imageFile);
+	let candidatePath = normalizePath(`${attachmentFolder}/${baseName}.${extension}`);
+	let suffix = 2;
+
+	while (plugin.app.vault.getAbstractFileByPath(candidatePath)) {
+		candidatePath = normalizePath(`${attachmentFolder}/${baseName}-${suffix}.${extension}`);
+		suffix += 1;
+	}
+
+	return candidatePath;
+}
+
+function createAttachmentBaseName(symbol: string): string {
+	const now = new Date();
+	const datePart = [
+		now.getFullYear(),
+		padDatePart(now.getMonth() + 1),
+		padDatePart(now.getDate()),
+	].join('');
+	const timePart = [
+		padDatePart(now.getHours()),
+		padDatePart(now.getMinutes()),
+		padDatePart(now.getSeconds()),
+	].join('');
+	const randomPart = Math.random().toString(36).slice(2, 8);
+	const symbolPart = sanitizeFileNamePart(normalizeSymbol(symbol) || 'image');
+
+	return `${symbolPart}-${datePart}-${timePart}-${randomPart}`;
+}
+
+function getImageFileExtension(file: File): string {
+	const extensionFromName = file.name.split('.').pop()?.toLowerCase();
+	if (extensionFromName && /^[a-z0-9]+$/.test(extensionFromName)) {
+		return extensionFromName === 'jpeg' ? 'jpg' : extensionFromName;
+	}
+
+	const extensionByMimeType: Record<string, string> = {
+		'image/apng': 'apng',
+		'image/avif': 'avif',
+		'image/bmp': 'bmp',
+		'image/gif': 'gif',
+		'image/jpeg': 'jpg',
+		'image/png': 'png',
+		'image/svg+xml': 'svg',
+		'image/tiff': 'tif',
+		'image/webp': 'webp',
+	};
+
+	return extensionByMimeType[file.type] ?? 'png';
+}
+
+function sanitizeFileNamePart(value: string): string {
+	const sanitized = value.trim().replace(/[\\/#^[\]|?*:]/g, '-').replace(/\s+/g, '-');
+	return sanitized || 'image';
 }
 
 function ImagePreview({ plugin, image }: { plugin: TraderJournalPlugin; image: TradeImage }) {

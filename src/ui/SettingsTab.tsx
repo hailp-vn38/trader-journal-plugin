@@ -77,7 +77,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 
 	return (
 		<div className="trader-journal-settings">
-			<h2>Trader journal settings</h2>
+			<h2>Trader Journal settings</h2>
 
 			<label className="trader-journal-setting">
 				<span className="trader-journal-setting__label">Journal folder</span>

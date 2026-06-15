@@ -1,4 +1,4 @@
-import { normalizePath, stringifyYaml, TFile, TFolder } from 'obsidian';
+import { normalizePath, parseYaml, stringifyYaml, TFile, TFolder } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import {
 	formatRr,
@@ -21,7 +21,7 @@ interface MarkdownParts {
 	body: string;
 }
 
-interface DailyTradeStats {
+export interface DailyTradeStats {
 	tradeCount: number;
 	winCount: number;
 	lossCount: number;
@@ -32,6 +32,24 @@ interface DailyTradeStats {
 	worstRr: number | null;
 	winRate: number;
 	tags: string[];
+}
+
+export interface RebuildDailyNoteStatsResult {
+	stats: DailyTradeStats;
+	updated: boolean;
+	skipped: boolean;
+}
+
+interface JournalIdentity {
+	symbol: string;
+	journalDate: string;
+}
+
+interface RebuiltNote {
+	content: string;
+	metadata: Record<string, unknown>;
+	stats: DailyTradeStats;
+	skipped: boolean;
 }
 
 export async function saveTradeToDailyNote(
@@ -52,37 +70,95 @@ export async function saveTradeToDailyNote(
 		file = await plugin.app.vault.create(filePath, renderInitialNote(symbol, journalDate));
 	}
 
-	let stats = getEmptyStats();
 	await plugin.app.vault.process(file, (content) => {
 		const { frontmatter, body } = splitFrontmatter(content);
 		const bodyWithTrade = appendTradeBlock(ensureTradesSection(body), trade);
-		const trades = extractTrades(bodyWithTrade);
-		stats = calculateDailyTradeStats(trades);
-		const summary = renderDailySummary(symbol, journalDate, stats);
 
-		return `${frontmatter}${upsertSummary(bodyWithTrade, summary)}`;
+		return `${frontmatter}${bodyWithTrade}`;
 	});
 
-	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
-		const metadata = frontmatter as Record<string, unknown>;
-
-		metadata.type = NOTE_TYPE;
-		metadata.schemaVersion = SCHEMA_VERSION;
-		metadata.symbol = symbol;
-		metadata.journalDate = journalDate;
-		metadata.tradeCount = stats.tradeCount;
-		metadata.winCount = stats.winCount;
-		metadata.lossCount = stats.lossCount;
-		metadata.breakevenCount = stats.breakevenCount;
-		metadata.netRr = roundNumber(stats.netRr);
-		metadata.averageRr = roundNumber(stats.averageRr);
-		metadata.bestRr = stats.bestRr === null ? null : roundNumber(stats.bestRr);
-		metadata.worstRr = stats.worstRr === null ? null : roundNumber(stats.worstRr);
-		metadata.winRate = roundNumber(stats.winRate);
-		metadata.tradeTags = stats.tags;
+	await rebuildDailyNoteStats(plugin, file, {
+		symbol,
+		journalDate,
 	});
 
 	return file;
+}
+
+export async function rebuildDailyNoteStats(
+	plugin: TraderJournalPlugin,
+	file: TFile,
+	fallbackIdentity?: Partial<JournalIdentity>,
+): Promise<RebuildDailyNoteStatsResult> {
+	if (file.extension !== 'md') {
+		return {
+			stats: getEmptyStats(),
+			updated: false,
+			skipped: true,
+		};
+	}
+
+	const initialContent = await plugin.app.vault.read(file);
+	const initialRebuild = buildRebuiltNote(file, initialContent, fallbackIdentity);
+	if (initialRebuild.skipped) {
+		return {
+			stats: initialRebuild.stats,
+			updated: false,
+			skipped: true,
+		};
+	}
+
+	let stats = initialRebuild.stats;
+	let metadata = initialRebuild.metadata;
+	let updated = false;
+
+	if (initialRebuild.content !== initialContent) {
+		await plugin.app.vault.process(file, (latestContent) => {
+			const latestRebuild = buildRebuiltNote(file, latestContent, fallbackIdentity);
+			if (latestRebuild.skipped) {
+				return latestContent;
+			}
+
+			stats = latestRebuild.stats;
+			metadata = latestRebuild.metadata;
+
+			if (latestRebuild.content === latestContent) {
+				return latestContent;
+			}
+
+			updated = true;
+			return latestRebuild.content;
+		});
+	}
+
+	const latestContent = updated ? await plugin.app.vault.read(file) : initialContent;
+	const currentFrontmatter = parseFrontmatter(splitFrontmatter(latestContent).frontmatter);
+
+	if (hasMetadataChanges(currentFrontmatter, metadata)) {
+		await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			const targetMetadata = frontmatter as Record<string, unknown>;
+
+			for (const [key, value] of Object.entries(metadata)) {
+				targetMetadata[key] = value;
+			}
+		});
+		updated = true;
+	}
+
+	return {
+		stats,
+		updated,
+		skipped: false,
+	};
+}
+
+export function isPotentialJournalFile(plugin: TraderJournalPlugin, file: TFile): boolean {
+	if (file.extension !== 'md') {
+		return false;
+	}
+
+	const journalFolder = normalizePath(plugin.settings.journalFolder).replace(/\/$/, '');
+	return Boolean(journalFolder) && file.path.startsWith(`${journalFolder}/`);
 }
 
 export function getJournalFilePath(rootFolder: string, symbol: string, journalDate: string): string {
@@ -90,7 +166,7 @@ export function getJournalFilePath(rootFolder: string, symbol: string, journalDa
 	const root = normalizePath(rootFolder || 'Trading/Backtests').replace(/\/$/, '');
 	const symbolFolder = sanitizePathSegment(symbol);
 
-	return normalizePath(`${root}/${symbolFolder}/${dateParts.year}/${dateParts.year}-${dateParts.month}/${journalDate}.md`);
+	return normalizePath(`${root}/${symbolFolder}/${dateParts.year}/${dateParts.month}/${journalDate}.md`);
 }
 
 export function createTradeId(symbol: string, openedAt: string, journalDate: string): string {
@@ -166,6 +242,90 @@ ${symbol} / ${journalDate}
 ${SUMMARY_END}`;
 }
 
+function buildRebuiltNote(
+	file: TFile,
+	content: string,
+	fallbackIdentity: Partial<JournalIdentity> | undefined,
+): RebuiltNote {
+	const { frontmatter, body } = splitFrontmatter(content);
+	const parsedFrontmatter = parseFrontmatter(frontmatter);
+	const trades = extractTrades(body);
+	const isJournalNote =
+		stringifyValue(parsedFrontmatter.type) === NOTE_TYPE ||
+		body.includes(`\`\`\`${TRADE_CODE_BLOCK_LANGUAGE}`) ||
+		Boolean(fallbackIdentity?.symbol || fallbackIdentity?.journalDate);
+
+	if (!isJournalNote) {
+		return {
+			content,
+			metadata: {},
+			stats: getEmptyStats(),
+			skipped: true,
+		};
+	}
+
+	const identity = getJournalIdentity(file, parsedFrontmatter, trades, fallbackIdentity);
+	const stats = calculateDailyTradeStats(trades);
+	const metadata = createDailyMetadata(identity, stats);
+	const summary = renderDailySummary(identity.symbol, identity.journalDate, stats);
+	const bodyWithSummary = upsertSummary(ensureTradesSection(body), summary);
+
+	return {
+		content: `${frontmatter}${bodyWithSummary}`,
+		metadata,
+		stats,
+		skipped: false,
+	};
+}
+
+function createDailyMetadata(identity: JournalIdentity, stats: DailyTradeStats): Record<string, unknown> {
+	return {
+		type: NOTE_TYPE,
+		schemaVersion: SCHEMA_VERSION,
+		symbol: identity.symbol,
+		journalDate: identity.journalDate,
+		tradeCount: stats.tradeCount,
+		winCount: stats.winCount,
+		lossCount: stats.lossCount,
+		breakevenCount: stats.breakevenCount,
+		netRr: roundNumber(stats.netRr),
+		averageRr: roundNumber(stats.averageRr),
+		bestRr: stats.bestRr === null ? null : roundNumber(stats.bestRr),
+		worstRr: stats.worstRr === null ? null : roundNumber(stats.worstRr),
+		winRate: roundNumber(stats.winRate),
+		tradeTags: stats.tags,
+	};
+}
+
+function getJournalIdentity(
+	file: TFile,
+	frontmatter: Record<string, unknown>,
+	trades: TradeEntry[],
+	fallbackIdentity: Partial<JournalIdentity> | undefined,
+): JournalIdentity {
+	const firstTrade = trades[0];
+	const symbol =
+		fallbackIdentity?.symbol ||
+		stringifyValue(frontmatter.symbol) ||
+		stringifyValue(firstTrade?.symbol) ||
+		inferSymbolFromPath(file.path);
+	const journalDate =
+		fallbackIdentity?.journalDate ||
+		stringifyValue(frontmatter.journalDate) ||
+		stringifyValue(firstTrade?.journalDate) ||
+		stringifyValue(firstTrade?.tradeDate) ||
+		inferJournalDateFromFile(file);
+
+	if (!symbol || !journalDate) {
+		throw new Error('Could not determine journal symbol or date.');
+	}
+
+	return {
+		symbol,
+		journalDate,
+	};
+}
+
 function upsertSummary(body: string, summary: string): string {
 	const summaryPattern = new RegExp(`${escapeRegExp(SUMMARY_START)}[\\s\\S]*?${escapeRegExp(SUMMARY_END)}`);
 
@@ -205,6 +365,17 @@ function splitFrontmatter(content: string): MarkdownParts {
 		frontmatter: match[0],
 		body: content.slice(match[0].length),
 	};
+}
+
+function parseFrontmatter(frontmatter: string): Record<string, unknown> {
+	const match = frontmatter.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+	const yaml = match?.[1];
+	if (!yaml) {
+		return {};
+	}
+
+	const parsed: unknown = parseYaml(yaml);
+	return isRecord(parsed) ? parsed : {};
 }
 
 function extractTrades(body: string): TradeEntry[] {
@@ -363,6 +534,20 @@ function parseJournalDate(journalDate: string): { year: string; month: string } 
 	return { year, month };
 }
 
+function inferSymbolFromPath(path: string): string {
+	const parts = path.split('/');
+	const fileNameIndex = parts.length - 1;
+	const monthIndex = fileNameIndex - 1;
+	const yearIndex = monthIndex - 1;
+	const symbolIndex = yearIndex - 1;
+
+	return parts[symbolIndex] ?? '';
+}
+
+function inferJournalDateFromFile(file: TFile): string {
+	return /^\d{4}-\d{2}-\d{2}$/.test(file.basename) ? file.basename : '';
+}
+
 function sanitizePathSegment(value: string): string {
 	const sanitized = value.trim().replace(/[\\/#^[\]|?*:]/g, '-').replace(/\s+/g, '-');
 	return sanitized || 'UNKNOWN';
@@ -398,6 +583,21 @@ function formatPercent(value: number): string {
 
 function roundNumber(value: number): number {
 	return Number(value.toFixed(2));
+}
+
+function hasMetadataChanges(
+	currentMetadata: Record<string, unknown>,
+	nextMetadata: Record<string, unknown>,
+): boolean {
+	return Object.entries(nextMetadata).some(([key, value]) => !areMetadataValuesEqual(currentMetadata[key], value));
+}
+
+function areMetadataValuesEqual(currentValue: unknown, nextValue: unknown): boolean {
+	return JSON.stringify(currentValue ?? null) === JSON.stringify(nextValue ?? null);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function escapeRegExp(value: string): string {

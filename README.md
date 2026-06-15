@@ -1,92 +1,120 @@
-# Obsidian Sample Plugin
+# Trader Journal
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Trader Journal is an Obsidian plugin for recording backtest trades in Markdown notes. It stores one daily journal file per symbol and renders each trade JSON block as a readable card in Reading View.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
+- Add backtest trades from an Obsidian modal.
+- Store one file per symbol per day.
+- Configure journal folder, symbols, and timeframes in settings.
+- Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
+- Auto-calculate holding time from opened and closed timestamps.
+- Paste image files directly into the Images input; pasted images are saved to the vault.
+- Render trade JSON blocks as cards in Reading View.
+- Click a rendered image to open a full-screen image preview.
+- Recalculate daily statistics automatically when a journal note changes.
+- Recalculate the active note manually with the command **Recalculate current stats**.
 
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and outputs a Notice on click.
-- Registers a global interval which logs 'setInterval' to the console.
+## Storage Layout
 
-## First time developing plugins?
+Journal files are created under the configured journal folder:
 
-Quick starting guide for new plugin devs:
-
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `src/main.ts` to `main.js`.
-- Make changes to `src/main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
-
-## Releasing new releases
-
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
-
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
-
-## Adding your plugin to the community plugin list
-
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v18 (`node --version`).
-- `npm i` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code.
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-	"fundingUrl": "https://buymeacoffee.com"
-}
+```text
+Trading/Backtests/
+  BTC/
+    2026/
+      06/
+        2026-06-15.md
+  _attachments/
 ```
 
-If you have multiple URLs, you can also do:
+The path format is:
 
-```json
-{
-	"fundingUrl": {
-		"Buy Me a Coffee": "https://buymeacoffee.com",
-		"GitHub Sponsor": "https://github.com/sponsors",
-		"Patreon": "https://www.patreon.com/"
-	}
-}
+```text
+{journalFolder}/{symbol}/{year}/{month}/{date}.md
 ```
 
-## API Documentation
+Example:
 
-See https://docs.obsidian.md
+```text
+Trading/Backtests/BTC/2026/06/2026-06-15.md
+```
+
+## Trade Blocks
+
+Trades are stored as fenced JSON code blocks:
+
+````markdown
+```trader-journal-trade
+{
+	"schemaVersion": 1,
+	"id": "20260412234400-BTC-a1b2c3",
+	"symbol": "BTC",
+	"side": "long",
+	"setup": "Breakout",
+	"timeframe": "1m",
+	"result": "win",
+	"rr": 1,
+	"tags": ["trend"],
+	"images": [
+		{
+			"type": "file",
+			"value": "Trading/Backtests/_attachments/BTC-20260615-102030-a1b2c3.png"
+		}
+	],
+	"notes": "Followed the plan.",
+	"opened_at": "2026-06-15T09:30:00+07:00",
+	"closed_at": "2026-06-15T10:05:00+07:00",
+	"holding_time": 35
+}
+```
+````
+
+The JSON block is the source of truth. The summary table and frontmatter statistics are regenerated from the trade blocks.
+
+## Commands
+
+- **Add backtest trade**: Opens the trade entry modal.
+- **Recalculate current stats**: Rebuilds the summary and frontmatter statistics for the active journal note.
+
+## Settings
+
+- **Journal folder**: Root folder for generated journal files.
+- **Symbols**: Symbols shown in the trade modal.
+- **Timeframes**: Timeframes shown in the trade modal.
+
+## Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run development build in watch mode:
+
+```bash
+npm run dev
+```
+
+Run production build:
+
+```bash
+npm run build
+```
+
+Run lint:
+
+```bash
+npm run lint
+```
+
+## Release Artifacts
+
+For an Obsidian plugin release, attach these files:
+
+- `manifest.json`
+- `main.js`
+- `styles.css`
+
+The plugin ID is `trader-journal-plugin`.

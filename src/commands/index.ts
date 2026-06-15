@@ -1,4 +1,6 @@
+import { Notice } from 'obsidian';
 import type TraderJournalPlugin from '../main';
+import { rebuildDailyNoteStats } from '../trades/storage';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
 
 export function registerCommands(plugin: TraderJournalPlugin) {
@@ -9,4 +11,32 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 			new TraderJournalModal(plugin.app, plugin).open();
 		},
 	});
+
+	plugin.addCommand({
+		id: 'recalculate-current-journal-stats',
+		name: 'Recalculate current stats',
+		callback: () => {
+			void recalculateCurrentJournalStats(plugin);
+		},
+	});
+}
+
+async function recalculateCurrentJournalStats(plugin: TraderJournalPlugin): Promise<void> {
+	const file = plugin.app.workspace.getActiveFile();
+	if (!file) {
+		new Notice('No active file.');
+		return;
+	}
+
+	try {
+		const result = await rebuildDailyNoteStats(plugin, file);
+		if (result.skipped) {
+			new Notice('Current file is not a trader journal note.');
+			return;
+		}
+
+		new Notice(`Recalculated ${result.stats.tradeCount} trade${result.stats.tradeCount === 1 ? '' : 's'}.`);
+	} catch (error) {
+		new Notice(error instanceof Error ? error.message : 'Could not recalculate stats.');
+	}
 }
