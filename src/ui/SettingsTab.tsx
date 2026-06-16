@@ -5,7 +5,8 @@ import { createRoot } from 'react-dom/client';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
-import { normalizeSymbol, normalizeTimeframe } from '../settings';
+import { CALENDAR_DISPLAY_MODE_CHANGE_EVENT, normalizeSymbol, normalizeTimeframe } from '../settings';
+import type { CalendarDisplayMode } from '../settings';
 
 interface SettingsViewProps {
 	plugin: TraderJournalPlugin;
@@ -19,6 +20,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const [timeframes, setTimeframes] = useState(plugin.settings.timeframes);
 	const [newTimeframe, setNewTimeframe] = useState('');
 	const [allowRemoteImages, setAllowRemoteImages] = useState(plugin.settings.allowRemoteImages);
+	const [calendarDisplayMode, setCalendarDisplayMode] = useState(plugin.settings.calendarDisplayMode);
 
 	const saveJournalFolder = (value: string) => {
 		setJournalFolder(value);
@@ -56,6 +58,13 @@ function SettingsView({ plugin }: SettingsViewProps) {
 		setAllowRemoteImages(value);
 		plugin.settings.allowRemoteImages = value;
 		void plugin.saveSettings();
+	};
+
+	const saveCalendarDisplayMode = (value: CalendarDisplayMode) => {
+		setCalendarDisplayMode(value);
+		plugin.settings.calendarDisplayMode = value;
+		void plugin.saveSettings();
+		window.dispatchEvent(new CustomEvent(CALENDAR_DISPLAY_MODE_CHANGE_EVENT, { detail: value }));
 	};
 
 	const addSymbol = () => {
@@ -147,6 +156,20 @@ function SettingsView({ plugin }: SettingsViewProps) {
 					<span>Allow remote image previews</span>
 				</label>
 			</section>
+
+			<label className="trader-journal-setting">
+				<span className="trader-journal-setting__label">Calendar display</span>
+				<span className="trader-journal-setting__description">Layout used in the trade calendar sidebar.</span>
+				<select
+					value={calendarDisplayMode}
+					onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+						saveCalendarDisplayMode(event.target.value as CalendarDisplayMode)
+					}
+				>
+					<option value="month">Month calendar</option>
+					<option value="horizontal_calendar">Horizontal calendar</option>
+				</select>
+			</label>
 
 			<section className="trader-journal-setting trader-journal-setting--list">
 				<div>

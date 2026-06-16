@@ -54,7 +54,8 @@
 	font-size: var(--font-ui-small);
 }
 
-.trader-journal-setting > input {
+.trader-journal-setting > input,
+.trader-journal-setting > select {
 	grid-column: 2;
 	grid-row: 1 / span 2;
 	width: 100%;
@@ -119,6 +120,13 @@
 
 .trader-journal-pill button {
 	padding: 2px 6px;
+}
+
+.trader-journal-modal button:not(:disabled):hover,
+.trader-journal-settings button:not(:disabled):hover,
+.trader-journal-trade-card button:not(:disabled):hover,
+.trader-journal-calendar button:not(:disabled):hover {
+	cursor: pointer;
 }
 
 .trader-journal-form__grid {
@@ -259,6 +267,53 @@
 
 .trader-journal-trade-card__title {
 	min-width: 0;
+}
+
+.trader-journal-trade-card__header-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-shrink: 0;
+	min-width: 0;
+}
+
+button.trader-journal-trade-card__edit-button,
+button.trader-journal-trade-card__edit-button:hover,
+button.trader-journal-trade-card__edit-button:active,
+button.trader-journal-trade-card__edit-button:focus,
+button.trader-journal-trade-card__edit-button:focus-visible {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	min-width: 28px;
+	min-height: 28px;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	background-color: transparent;
+	background-image: none;
+	box-shadow: none;
+	padding: 0;
+	color: var(--text-muted);
+}
+
+button.trader-journal-trade-card__edit-button:hover,
+button.trader-journal-trade-card__edit-button:focus-visible {
+	color: var(--text-normal);
+}
+
+button.trader-journal-trade-card__edit-button:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+button.trader-journal-trade-card__edit-button svg {
+	width: 16px;
+	height: 16px;
 }
 
 .trader-journal-trade-card__symbol {
@@ -458,6 +513,7 @@
 
 .trader-journal-calendar-view {
 	overflow: hidden;
+	padding: 8px;
 }
 
 .trader-journal-calendar {
@@ -467,7 +523,6 @@
 	height: 100%;
 	min-width: 0;
 	overflow: auto;
-	padding: 8px;
 }
 
 .trader-journal-calendar__header {
@@ -577,6 +632,65 @@
 	background: var(--color-green);
 }
 
+.trader-journal-horizontal-calendar {
+	display: grid;
+	grid-auto-columns: 46px;
+	grid-auto-flow: column;
+	gap: 6px;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 2px 0 6px;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+
+.trader-journal-horizontal-calendar::-webkit-scrollbar {
+	display: none;
+}
+
+.trader-journal-horizontal-calendar-day {
+	display: grid;
+	grid-template-rows: 8px auto auto;
+	align-items: center;
+	justify-items: center;
+	gap: 2px;
+	min-width: 46px;
+	height: 58px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	padding: 5px 4px;
+}
+
+.trader-journal-horizontal-calendar-day:hover {
+	background: var(--background-modifier-hover);
+}
+
+.trader-journal-horizontal-calendar-day--selected {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+.trader-journal-horizontal-calendar-day--today .trader-journal-horizontal-calendar-day__number {
+	box-shadow: inset 0 -2px 0 var(--interactive-accent);
+}
+
+.trader-journal-horizontal-calendar-day__weekday {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.2;
+}
+
+.trader-journal-horizontal-calendar-day__number {
+	min-width: 1.5em;
+	font-size: var(--font-ui-small);
+	font-weight: 700;
+	line-height: 1.25;
+	text-align: center;
+}
+
 .trader-journal-calendar__day-panel {
 	display: flex;
 	flex-direction: column;
@@ -616,6 +730,40 @@
 .trader-journal-calendar__icon-button svg {
 	width: 16px;
 	height: 16px;
+}
+
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain,
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:hover,
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:active,
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus,
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus-visible {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	background-color: transparent;
+	background-image: none;
+	box-shadow: none;
+}
+
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain {
+	color: var(--text-muted);
+}
+
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:hover,
+.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus-visible {
+	color: var(--text-normal);
+}
+
+.trader-journal-calendar-card__head-meta .trader-journal-calendar__icon-button {
+	width: 24px;
+	height: 24px;
+	min-width: 24px;
+	min-height: 24px;
+}
+
+.trader-journal-calendar-card__head-meta .trader-journal-calendar__icon-button svg {
+	width: 14px;
+	height: 14px;
 }
 
 .trader-journal-calendar__filter {
@@ -669,12 +817,12 @@
 	content: "";
 }
 
-.trader-journal-calendar-card--backtest::before {
-	background: var(--color-blue);
+.trader-journal-calendar-card--long::before {
+	background: var(--color-green);
 }
 
-.trader-journal-calendar-card--live::before {
-	background: var(--color-green);
+.trader-journal-calendar-card--short::before {
+	background: var(--color-red);
 }
 
 .trader-journal-calendar-card:hover,
@@ -696,6 +844,14 @@
 	min-width: 0;
 }
 
+.trader-journal-calendar-card__head-meta {
+	display: inline-flex;
+	align-items: center;
+	justify-self: end;
+	gap: 6px;
+	min-width: 0;
+}
+
 .trader-journal-calendar-card__symbol {
 	min-width: 0;
 	color: var(--text-normal);
@@ -712,6 +868,23 @@
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 	line-height: 1.35;
+}
+
+.trader-journal-calendar-card__status {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 5px;
+	padding: 1px 5px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.25;
+}
+
+.trader-journal-calendar-card__status--open {
+	border-color: var(--color-yellow);
+	color: var(--color-yellow);
+}
+
+.trader-journal-calendar-card__status--closed {
+	color: var(--text-muted);
 }
 
 .trader-journal-calendar-card__time,
@@ -735,6 +908,18 @@
 	line-height: 1.35;
 }
 
+.trader-journal-calendar-card__result--win {
+	color: var(--color-green);
+}
+
+.trader-journal-calendar-card__result--loss {
+	color: var(--color-red);
+}
+
+.trader-journal-calendar-card__result--breakeven {
+	color: var(--text-muted);
+}
+
 .trader-journal-calendar-card__notes {
 	padding-top: 1px;
 }
@@ -745,6 +930,11 @@
 	}
 
 	.trader-journal-setting > input {
+		grid-column: 1;
+		grid-row: auto;
+	}
+
+	.trader-journal-setting > select {
 		grid-column: 1;
 		grid-row: auto;
 	}
@@ -774,6 +964,10 @@
 
 	.trader-journal-trade-card__header {
 		flex-direction: column;
+	}
+
+	.trader-journal-trade-card__header-meta {
+		justify-content: flex-start;
 	}
 
 	.trader-journal-trade-card__badges {

@@ -6,13 +6,14 @@ import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent,
 import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
 import { normalizeSymbol } from '../settings';
-import { formatDuration } from '../trades/format';
+import { formatDuration, normalizeTradeImages, stringifyValue } from '../trades/format';
 import {
 	calculateHoldingTime,
 	createTradeId,
 	saveTradeToDailyNote,
+	updateTradeInJournalFile,
 } from '../trades/storage';
-import type { TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
+import type { LiveTradeStatus, TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
 
 const SIDE_OPTIONS: Array<{ value: TradeSide; label: string }> = [
 	{ value: 'long', label: 'Long' },
@@ -28,11 +29,14 @@ const RESULT_OPTIONS: Array<{ value: TradeResult; label: string }> = [
 interface TraderJournalModalContentProps {
 	plugin: TraderJournalPlugin;
 	journalType: TradeJournalType;
+	initialTrade?: TradeEntry;
+	targetFilePath?: string;
 	closeModal: () => void;
 }
 
 interface TradeFormState {
 	symbol: string;
+	status: LiveTradeStatus;
 	side: TradeSide;
 	setup: string;
 	timeframe: string;
@@ -49,24 +53,14 @@ interface TradeFormState {
 	closedAt: string;
 }
 
-function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJournalModalContentProps) {
-	const [form, setForm] = useState<TradeFormState>(() => ({
-		symbol: plugin.settings.symbols[0] ?? '',
-		side: 'long',
-		setup: '',
-		timeframe: plugin.settings.timeframes[0] ?? '',
-		result: 'win',
-		rr: '',
-		tags: '',
-		entryPrice: '',
-		stopLoss: '',
-		exitPrice: '',
-		takeProfit: '',
-		images: [],
-		notes: '',
-		openedAt: '',
-		closedAt: '',
-	}));
+function TraderJournalModalContent({
+	plugin,
+	journalType,
+	initialTrade,
+	targetFilePath,
+	closeModal,
+}: TraderJournalModalContentProps) {
+	const [form, setForm] = useState<TradeFormState>(() => createInitialForm(plugin, journalType, initialTrade));
 	const [imageInput, setImageInput] = useState('');
 	const [error, setError] = useState('');
 	const [isSaving, setIsSaving] = useState(false);
@@ -80,6 +74,8 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 		[form.entryPrice, form.exitPrice, form.side, form.stopLoss],
 	);
 	const isLiveJournal = journalType === 'live';
+	const isEditing = Boolean(initialTrade && targetFilePath);
+	const isLiveTradeClosed = !isLiveJournal || form.status === 'closed';
 
 	useEffect(
 		() => () => {
@@ -101,7 +97,19 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 		setForm((currentForm) => ({
 			...currentForm,
 			openedAt,
-			closedAt: syncClosedAtDate(openedAt, currentForm.openedAt, currentForm.closedAt),
+			closedAt:
+				journalType === 'backtest'
+					? syncClosedAtDate(openedAt, currentForm.openedAt, currentForm.closedAt)
+					: currentForm.closedAt,
+		}));
+	}
+
+	function updateLiveStatus(status: LiveTradeStatus) {
+		setForm((currentForm) => ({
+			...currentForm,
+			status,
+			closedAt:
+				status === 'closed' && !currentForm.closedAt ? getCurrentDateTimeLocalInput() : currentForm.closedAt,
 		}));
 	}
 
@@ -206,8 +214,8 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 		const symbol = normalizeSymbol(form.symbol);
 		const journalDate = getTodayDateInput();
 		const openedAt = toLocalIsoString(form.openedAt);
-		const closedAt = toLocalIsoString(form.closedAt);
-		const rr = isLiveJournal ? (liveRr ?? 0) : Number(form.rr);
+		const closedAt = isLiveTradeClosed ? toLocalIsoString(form.closedAt) : '';
+		const rr = isLiveJournal ? (isLiveTradeClosed ? (liveRr ?? 0) : 0) : Number(form.rr);
 		const pendingImage = createTradeImage(imageInput);
 		const images =
 			pendingImage && !form.images.some((image) => image.value === pendingImage.value)
@@ -215,37 +223,46 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 				: form.images;
 		const trade: TradeEntry = {
 			schemaVersion: 1,
-			id: createTradeId(symbol, openedAt, journalDate),
-			date: getCurrentLocalIsoString(),
+			id: stringifyValue(initialTrade?.id) || createTradeId(symbol, openedAt, journalDate),
+			date: stringifyValue(initialTrade?.date) || getCurrentLocalIsoString(),
 			journal_type: journalType,
 			symbol,
 			side: form.side,
 			setup: form.setup.trim(),
 			timeframe: form.timeframe,
-			result: form.result,
 			rr,
 			images,
 			notes: form.notes.trim(),
 			opened_at: openedAt,
-			closed_at: closedAt,
-			holding_time: calculateHoldingTime(openedAt, closedAt),
 		};
 		if (!isLiveJournal) {
+			trade.result = form.result;
+			trade.closed_at = closedAt;
+			trade.holding_time = calculateHoldingTime(openedAt, closedAt);
 			trade.tags = parseTags(form.tags);
 		} else {
+			trade.status = form.status;
+			if (isLiveTradeClosed) {
+				trade.result = form.result;
+				trade.closed_at = closedAt;
+				trade.exit_price = Number(form.exitPrice);
+				trade.holding_time = calculateHoldingTime(openedAt, closedAt);
+			}
 			trade.entry_price = Number(form.entryPrice);
 			trade.stop_loss = Number(form.stopLoss);
-			trade.exit_price = Number(form.exitPrice);
 			trade.take_profit = Number(form.takeProfit);
 		}
 
 		try {
 			setIsSaving(true);
 			setError('');
-			const file = await saveTradeToDailyNote(plugin, journalDate, trade);
+			const file =
+				isEditing && targetFilePath
+					? await updateTradeInJournalFile(plugin, targetFilePath, trade)
+					: await saveTradeToDailyNote(plugin, journalDate, trade);
 			savedTradeRef.current = true;
 			createdAttachmentPathsRef.current.clear();
-			new Notice(`Saved trade to ${file.path}`);
+			new Notice(`${isEditing ? 'Updated' : 'Saved'} trade in ${file.path}`);
 			closeModal();
 		} catch (saveError) {
 			setError(saveError instanceof Error ? saveError.message : 'Could not save trade.');
@@ -255,7 +272,13 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 
 	return (
 		<form className="trader-journal-modal trader-journal-form" onSubmit={handleSubmit}>
-			<h2>{isLiveJournal ? 'Add live trade' : 'Add backtest trade'}</h2>
+			<h2>
+				{isEditing
+					? `Edit ${isLiveJournal ? 'live' : 'backtest'} trade`
+					: isLiveJournal
+						? 'Add live trade'
+						: 'Add backtest trade'}
+			</h2>
 
 			{error ? <div className="trader-journal-form__error">{error}</div> : null}
 
@@ -275,6 +298,21 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 						))}
 					</select>
 				</label>
+
+				{isLiveJournal ? (
+					<label className="trader-journal-field">
+						<span>Status</span>
+						<select
+							value={form.status}
+							onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+								updateLiveStatus(event.target.value as LiveTradeStatus)
+							}
+						>
+							<option value="open">Open</option>
+							<option value="closed">Closed</option>
+						</select>
+					</label>
+				) : null}
 
 				<label className="trader-journal-field">
 					<span>Side</span>
@@ -306,21 +344,23 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 					</select>
 				</label>
 
-				<label className="trader-journal-field">
-					<span>Result</span>
-					<select
-						value={form.result}
-						onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-							updateField('result', event.target.value as TradeResult)
-						}
-					>
-						{RESULT_OPTIONS.map((option) => (
-							<option value={option.value} key={option.value}>
-								{option.label}
-							</option>
-						))}
-					</select>
-				</label>
+				{isLiveJournal && !isLiveTradeClosed ? null : (
+					<label className="trader-journal-field">
+						<span>Result</span>
+						<select
+							value={form.result}
+							onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+								updateField('result', event.target.value as TradeResult)
+							}
+						>
+							{RESULT_OPTIONS.map((option) => (
+								<option value={option.value} key={option.value}>
+									{option.label}
+								</option>
+							))}
+						</select>
+					</label>
+				)}
 
 				<label className="trader-journal-field">
 					<span>{isLiveJournal ? 'Entry price' : 'RR'}</span>
@@ -359,17 +399,19 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 							/>
 						</label>
 
-						<label className="trader-journal-field">
-							<span>Exit price</span>
-							<input
-								type="number"
-								step="0.01"
-								value={form.exitPrice}
-								placeholder="102"
-								onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('exitPrice', event.target.value)}
-								required
-							/>
-						</label>
+							{isLiveTradeClosed ? (
+								<label className="trader-journal-field">
+									<span>Exit price</span>
+									<input
+										type="number"
+										step="0.01"
+										value={form.exitPrice}
+										placeholder="102"
+										onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('exitPrice', event.target.value)}
+										required
+									/>
+								</label>
+							) : null}
 
 						<label className="trader-journal-field">
 							<span>Take profit</span>
@@ -395,15 +437,17 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 					/>
 				</label>
 
-				<label className="trader-journal-field">
-					<span>Closed at</span>
-					<input
-						type="datetime-local"
-						value={form.closedAt}
-						onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('closedAt', event.target.value)}
-						required
-					/>
-				</label>
+				{isLiveJournal && !isLiveTradeClosed ? null : (
+					<label className="trader-journal-field">
+						<span>Closed at</span>
+						<input
+							type="datetime-local"
+							value={form.closedAt}
+							onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('closedAt', event.target.value)}
+							required
+						/>
+					</label>
+				)}
 
 				<div className="trader-journal-field trader-journal-field--readonly">
 					<span>Holding time</span>
@@ -413,7 +457,7 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 				{isLiveJournal ? (
 					<div className="trader-journal-field trader-journal-field--readonly">
 						<span>RR</span>
-						<strong>{liveRr === null ? '-' : `${formatComputedRr(liveRr)}R`}</strong>
+						<strong>{!isLiveTradeClosed || liveRr === null ? '-' : `${formatComputedRr(liveRr)}R`}</strong>
 					</div>
 				) : null}
 			</div>
@@ -485,7 +529,7 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 					Cancel
 				</button>
 				<button type="submit" className="mod-cta" disabled={isSaving || isPastingImage}>
-					{isSaving ? 'Saving...' : 'Save trade'}
+					{isSaving ? 'Saving...' : isEditing ? 'Update trade' : 'Save trade'}
 				</button>
 			</div>
 		</form>
@@ -495,12 +539,22 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 export class TraderJournalModal extends Modal {
 	private readonly plugin: TraderJournalPlugin;
 	private readonly journalType: TradeJournalType;
+	private readonly initialTrade: TradeEntry | undefined;
+	private readonly targetFilePath: string | undefined;
 	private root: Root | null = null;
 
-	constructor(app: App, plugin: TraderJournalPlugin, journalType: TradeJournalType = 'backtest') {
+	constructor(
+		app: App,
+		plugin: TraderJournalPlugin,
+		journalType: TradeJournalType = 'backtest',
+		initialTrade?: TradeEntry,
+		targetFilePath?: string,
+	) {
 		super(app);
 		this.plugin = plugin;
 		this.journalType = journalType;
+		this.initialTrade = initialTrade;
+		this.targetFilePath = targetFilePath;
 	}
 
 	onOpen() {
@@ -509,15 +563,17 @@ export class TraderJournalModal extends Modal {
 		this.contentEl.addClass('trader-journal-modal-content');
 		this.contentEl.empty();
 		this.root = createRoot(this.contentEl);
-			this.root.render(
-				<StrictMode>
-					<TraderJournalModalContent
-						plugin={this.plugin}
-						journalType={this.journalType}
-						closeModal={() => this.close()}
-					/>
-				</StrictMode>,
-			);
+		this.root.render(
+			<StrictMode>
+				<TraderJournalModalContent
+					plugin={this.plugin}
+					journalType={this.journalType}
+					initialTrade={this.initialTrade}
+					targetFilePath={this.targetFilePath}
+					closeModal={() => this.close()}
+				/>
+			</StrictMode>,
+		);
 	}
 
 	onClose() {
@@ -527,6 +583,42 @@ export class TraderJournalModal extends Modal {
 		this.contentEl.removeClass('trader-journal-modal-content');
 		this.contentEl.empty();
 	}
+}
+
+function createInitialForm(
+	plugin: TraderJournalPlugin,
+	journalType: TradeJournalType,
+	initialTrade: TradeEntry | undefined,
+): TradeFormState {
+	const isLiveJournal = journalType === 'live';
+	const status = getInitialLiveStatus(initialTrade);
+
+	return {
+		symbol: stringifyValue(initialTrade?.symbol) || plugin.settings.symbols[0] || '',
+		status,
+		side: initialTrade?.side === 'short' ? 'short' : 'long',
+		setup: stringifyValue(initialTrade?.setup),
+		timeframe: stringifyValue(initialTrade?.timeframe) || plugin.settings.timeframes[0] || '',
+		result: initialTrade?.result ?? 'win',
+		rr: stringifyValue(initialTrade?.rr),
+		tags: stringifyValue(initialTrade?.tags),
+		entryPrice: stringifyValue(initialTrade?.entry_price),
+		stopLoss: stringifyValue(initialTrade?.stop_loss),
+		exitPrice: stringifyValue(initialTrade?.exit_price),
+		takeProfit: stringifyValue(initialTrade?.take_profit),
+		images: normalizeTradeImages(initialTrade?.images),
+		notes: stringifyValue(initialTrade?.notes),
+		openedAt: toDateTimeLocalInput(initialTrade?.opened_at),
+		closedAt: isLiveJournal && status === 'open' ? '' : toDateTimeLocalInput(initialTrade?.closed_at),
+	};
+}
+
+function getInitialLiveStatus(initialTrade: TradeEntry | undefined): LiveTradeStatus {
+	if (initialTrade?.status === 'open' || initialTrade?.status === 'closed') {
+		return initialTrade.status;
+	}
+
+	return stringifyValue(initialTrade?.closed_at) ? 'closed' : 'open';
 }
 
 function validateForm(form: TradeFormState, journalType: TradeJournalType): string | null {
@@ -548,9 +640,9 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType): stri
 	}
 
 	if (journalType === 'live') {
+		const isClosed = form.status === 'closed';
 		const entryPrice = parseRequiredNumber(form.entryPrice);
 		const stopLoss = parseRequiredNumber(form.stopLoss);
-		const exitPrice = parseRequiredNumber(form.exitPrice);
 		const takeProfit = parseRequiredNumber(form.takeProfit);
 
 		if (entryPrice === null) {
@@ -559,10 +651,6 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType): stri
 
 		if (stopLoss === null) {
 			return 'Stop loss must be a number.';
-		}
-
-		if (exitPrice === null) {
-			return 'Exit price must be a number.';
 		}
 
 		if (takeProfit === null) {
@@ -585,16 +673,27 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType): stri
 			return 'Short take profit must be below entry price.';
 		}
 
-		if (calculateLiveRr(form.side, form.entryPrice, form.stopLoss, form.exitPrice) === null) {
-			return 'Stop loss must be different from entry price.';
+		if (isClosed) {
+			const exitPrice = parseRequiredNumber(form.exitPrice);
+			if (exitPrice === null) {
+				return 'Exit price must be a number.';
+			}
+
+			if (calculateLiveRr(form.side, form.entryPrice, form.stopLoss, form.exitPrice) === null) {
+				return 'Stop loss must be different from entry price.';
+			}
 		}
 	}
 
-	if (!form.openedAt || !form.closedAt) {
+	if (!form.openedAt || (journalType === 'backtest' && !form.closedAt)) {
 		return 'Opened at and closed at are required.';
 	}
 
-	if (calculateHoldingTime(form.openedAt, form.closedAt) === null) {
+	if (journalType === 'live' && form.status === 'closed' && !form.closedAt) {
+		return 'Closed at is required when the live trade is closed.';
+	}
+
+	if (form.closedAt && calculateHoldingTime(form.openedAt, form.closedAt) === null) {
 		return 'Closed at must be after opened at.';
 	}
 
@@ -914,6 +1013,27 @@ function cleanImageValue(value: string): string {
 function getTodayDateInput(): string {
 	const now = new Date();
 	return `${now.getFullYear()}-${padDatePart(now.getMonth() + 1)}-${padDatePart(now.getDate())}`;
+}
+
+function getCurrentDateTimeLocalInput(): string {
+	return formatDateTimeLocalInput(new Date());
+}
+
+function toDateTimeLocalInput(value: unknown): string {
+	const raw = stringifyValue(value);
+	if (!raw) {
+		return '';
+	}
+
+	const date = new Date(raw);
+	return Number.isNaN(date.getTime()) ? '' : formatDateTimeLocalInput(date);
+}
+
+function formatDateTimeLocalInput(date: Date): string {
+	return [
+		`${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`,
+		`T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`,
+	].join('');
 }
 
 function toLocalIsoString(value: string): string {

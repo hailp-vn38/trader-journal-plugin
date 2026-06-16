@@ -9,6 +9,7 @@ import {
 import { extractTrades, hasTradeBlocks, parseFrontmatter, splitFrontmatter } from './parser';
 import { isPotentialJournalFile } from './storage';
 import type { TradeEntry, TradeJournalType } from './types';
+import type { LiveTradeStatus, TradeResult, TradeSide } from './types';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -21,13 +22,17 @@ export interface JournalCalendarTrade {
 	journalType: TradeJournalType;
 	symbol: string;
 	side: string;
+	sideKey: TradeSide | null;
 	setup: string;
 	timeframe: string;
 	result: string;
+	resultKey: TradeResult | null;
 	rr: string;
 	notes: string;
 	createdAt: string;
 	sortTime: number;
+	status: LiveTradeStatus | null;
+	headingLine: number | null;
 	trade: TradeEntry;
 }
 
@@ -125,7 +130,7 @@ export class JournalCalendarIndex {
 		for (const day of Object.values(daysByDate)) {
 			day.trades.sort((firstTrade, secondTrade) => {
 				if (firstTrade.sortTime !== secondTrade.sortTime) {
-					return firstTrade.sortTime - secondTrade.sortTime;
+					return secondTrade.sortTime - firstTrade.sortTime;
 				}
 
 				return firstTrade.filePath.localeCompare(secondTrade.filePath);
@@ -158,7 +163,7 @@ export class JournalCalendarIndex {
 
 			const identity = getJournalIdentity(this.plugin, file, parsedFrontmatter, extractedTrades.trades);
 			const trades = extractedTrades.trades.map((trade, index) =>
-				createCalendarTrade(file, identity, trade, index),
+				createCalendarTrade(file, content, identity, trade, index),
 			);
 
 			return {
@@ -174,27 +179,35 @@ export class JournalCalendarIndex {
 
 function createCalendarTrade(
 	file: TFile,
+	content: string,
 	identity: JournalIdentity,
 	trade: TradeEntry,
 	index: number,
 ): JournalCalendarTrade {
 	const createdAt = getTradeCreatedAt(trade, file);
+	const sideKey = normalizeTradeSide(trade.side);
+	const resultKey = normalizeTradeResult(trade.result);
+	const journalType = normalizeJournalType(trade.journal_type) ?? identity.journalType;
 
 	return {
 		id: stringifyValue(trade.id) || `${file.path}-${index}`,
 		file,
 		filePath: file.path,
 		journalDate: identity.journalDate,
-		journalType: normalizeJournalType(trade.journal_type) ?? identity.journalType,
+		journalType,
 		symbol: stringifyValue(trade.symbol) || identity.symbol,
 		side: formatSide(trade.side),
+		sideKey,
 		setup: stringifyValue(trade.setup),
 		timeframe: stringifyValue(trade.timeframe),
 		result: formatResult(trade.result),
+		resultKey,
 		rr: formatRr(trade.rr),
 		notes: stringifyValue(trade.notes),
 		createdAt,
 		sortTime: parseDateMs(createdAt) ?? file.stat.ctime + index,
+		status: journalType === 'live' ? getLiveTradeStatus(trade) : null,
+		headingLine: findTradeHeadingLine(content, trade),
 		trade,
 	};
 }
@@ -249,6 +262,56 @@ function getJournalType(
 
 function normalizeJournalType(value: unknown): TradeJournalType | null {
 	return value === 'live' || value === 'backtest' ? value : null;
+}
+
+function normalizeTradeSide(value: unknown): TradeSide | null {
+	return value === 'long' || value === 'short' ? value : null;
+}
+
+function normalizeTradeResult(value: unknown): TradeResult | null {
+	const result = stringifyValue(value).toLowerCase();
+	if (result === 'win') {
+		return 'win';
+	}
+
+	if (result === 'loss' || result === 'thua') {
+		return 'loss';
+	}
+
+	if (result === 'breakeven' || result === 'hoà vốn' || result === 'hoa von') {
+		return 'breakeven';
+	}
+
+	return null;
+}
+
+function getLiveTradeStatus(trade: TradeEntry): LiveTradeStatus {
+	if (trade.status === 'open' || trade.status === 'closed') {
+		return trade.status;
+	}
+
+	return stringifyValue(trade.closed_at) ? 'closed' : 'open';
+}
+
+function findTradeHeadingLine(content: string, trade: TradeEntry): number | null {
+	const id = stringifyValue(trade.id);
+	if (!id) {
+		return null;
+	}
+
+	const idIndex = content.indexOf(`"id": ${JSON.stringify(id)}`);
+	if (idIndex === -1) {
+		return null;
+	}
+
+	const beforeId = content.slice(0, idIndex);
+	const headingMatches = [...beforeId.matchAll(/^###\s+.*$/gm)];
+	const headingIndex = headingMatches[headingMatches.length - 1]?.index;
+	if (headingIndex === undefined) {
+		return beforeId.split(/\r?\n/).length - 1;
+	}
+
+	return content.slice(0, headingIndex).split(/\r?\n/).length - 1;
 }
 
 function inferJournalTypeFromPath(plugin: TraderJournalPlugin, path: string): TradeJournalType {

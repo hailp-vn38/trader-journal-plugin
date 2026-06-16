@@ -4,6 +4,7 @@ export type TradeJournalType = 'backtest' | 'live';
 export type TradeResult = 'loss' | 'win' | 'breakeven';
 export type TradeSide = 'long' | 'short';
 export type TradeImageType = 'url' | 'file';
+export type LiveTradeStatus = 'open' | 'closed';
 
 export interface TradeImage {
 	type?: TradeImageType;
@@ -16,6 +17,7 @@ export interface TradeEntry {
 	id?: string;
 	date?: string;
 	journal_type?: TradeJournalType;
+	status?: LiveTradeStatus;
 	symbol?: string;
 	side?: TradeSide;
 	setup?: string;
@@ -32,6 +34,8 @@ export interface TradeEntry {
 	opened_at?: string;
 	closed_at?: string;
 	holding_time?: number | string | null;
+	backtest_start_date?: string | null;
+	backtest_end_date?: string | null;
 	[key: string]: unknown;
 }
 

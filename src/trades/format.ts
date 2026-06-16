@@ -1,9 +1,12 @@
 import type { NormalizedTradeImage, TradeEntry, TradeImage } from './types';
 
 const RESULT_LABELS: Record<string, string> = {
-	loss: 'Thua',
-	win: 'WIN',
-	breakeven: 'Hoà vốn',
+	loss: 'Loss',
+	thua: 'Loss',
+	win: 'Win',
+	breakeven: 'Breakeven',
+	'hoà vốn': 'Breakeven',
+	'hoa von': 'Breakeven',
 };
 
 const SIDE_LABELS: Record<string, string> = {
@@ -16,6 +19,7 @@ export const KNOWN_TRADE_FIELDS = new Set([
 	'id',
 	'date',
 	'journal_type',
+	'status',
 	'symbol',
 	'side',
 	'setup',
@@ -32,6 +36,8 @@ export const KNOWN_TRADE_FIELDS = new Set([
 	'opened_at',
 	'closed_at',
 	'holding_time',
+	'backtest_start_date',
+	'backtest_end_date',
 ]);
 
 export function parseTradeJson(source: string): { trade: TradeEntry | null; error: string | null } {

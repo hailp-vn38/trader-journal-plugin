@@ -7,10 +7,11 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 - Add backtest trades from an Obsidian modal.
 - Add live trades from a separate modal flow.
 - Open a sidebar calendar with separate backtest and live dots per journal date.
+- Edit live trades from the sidebar calendar.
 - Store one file per symbol per day.
 - Configure journal folder, symbols, and timeframes in settings.
 - Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
-- Track live entry price, stop loss, exit price, take profit, and auto-calculated RR.
+- Track live entry price, stop loss, take profit, open/closed status, exit price, and auto-calculated RR.
 - Auto-calculate holding time from opened and closed timestamps.
 - Paste image files directly into the Images input; unsaved pasted images are moved to trash if the modal closes without saving.
 - Render trade JSON blocks as cards in Reading View.
@@ -60,6 +61,7 @@ Trades are stored as fenced JSON code blocks:
 	"schemaVersion": 1,
 	"id": "20260412234400-BTC-a1b2c3",
 	"date": "2026-06-15T10:06:00+07:00",
+	"journal_type": "backtest",
 	"symbol": "BTC",
 	"side": "long",
 	"setup": "Breakout",
@@ -85,6 +87,10 @@ The JSON block is the source of truth. The `date` field stores when the trade en
 
 Live trade RR is calculated automatically from actual risk. For long trades it uses `(exit_price - entry_price) / (entry_price - stop_loss)`. For short trades it uses `(entry_price - exit_price) / (stop_loss - entry_price)`.
 
+Live trades can be `open` or `closed`. Open live trades store `opened_at` without automatically creating `closed_at`; when a live trade is changed to `closed`, `closed_at` is filled with the current time unless the user edits it.
+
+Backtest daily note properties include `backtest_start_date` and `backtest_end_date` with empty values so users can manually record the date range of the backtested data.
+
 ## Commands
 
 - **Add backtest trade**: Opens the trade entry modal.
@@ -98,6 +104,7 @@ Live trade RR is calculated automatically from actual risk. For long trades it u
 - **Live journal folder**: Root folder for generated live journal files.
 - **Symbols**: Symbols shown in the trade modal.
 - **Timeframes**: Timeframes shown in the trade modal.
+- **Calendar display**: Chooses the month grid or horizontal calendar layout in the sidebar.
 - **Remote images**: Allows image previews from external URLs. This is disabled by default.
 
 ## Privacy

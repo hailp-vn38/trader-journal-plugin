@@ -4,6 +4,7 @@ import {
 	formatRr,
 	formatSide,
 	formatTags,
+	parseTradeJson,
 	stringifyValue,
 } from './format';
 import { extractTrades, hasTradeBlocks, parseFrontmatter, splitFrontmatter } from './parser';
@@ -16,6 +17,7 @@ const DEFAULT_JOURNAL_TYPE: TradeJournalType = 'backtest';
 const SCHEMA_VERSION = 1;
 const SUMMARY_START = '<!-- trader-journal:summary:start -->';
 const SUMMARY_END = '<!-- trader-journal:summary:end -->';
+const TRADE_BLOCK_PATTERN = /```trader-journal-trade\s*\n([\s\S]*?)\n```/g;
 
 export interface DailyTradeStats {
 	tradeCount: number;
@@ -82,6 +84,42 @@ export async function saveTradeToDailyNote(
 		journalType,
 	});
 
+	return file;
+}
+
+export async function updateTradeInJournalFile(
+	plugin: TraderJournalPlugin,
+	filePath: string,
+	trade: TradeEntry,
+): Promise<TFile> {
+	const tradeId = stringifyValue(trade.id);
+	if (!tradeId) {
+		throw new Error('Trade id is required.');
+	}
+
+	const file = getFile(plugin, filePath);
+	if (!file) {
+		throw new Error(`Could not find ${filePath}.`);
+	}
+
+	let updated = false;
+	await plugin.app.vault.process(file, (content) =>
+		content.replace(TRADE_BLOCK_PATTERN, (block, source: string) => {
+			const { trade: existingTrade } = parseTradeJson(source);
+			if (stringifyValue(existingTrade?.id) !== tradeId) {
+				return block;
+			}
+
+			updated = true;
+			return `\`\`\`${TRADE_CODE_BLOCK_LANGUAGE}\n${JSON.stringify(trade, null, '\t')}\n\`\`\``;
+		}),
+	);
+
+	if (!updated) {
+		throw new Error('Could not find trade block to update.');
+	}
+
+	await rebuildDailyNoteStats(plugin, file);
 	return file;
 }
 
@@ -213,6 +251,12 @@ function renderInitialNote(symbol: string, journalDate: string, journalType: Tra
 		worstRr: null,
 		winRate: 0,
 		tradeTags: [],
+		...(journalType === 'backtest'
+			? {
+					backtest_start_date: null,
+					backtest_end_date: null,
+				}
+			: {}),
 	});
 
 	return `---\n${frontmatter}---\n\n${renderDailySummary(symbol, journalDate, journalType, stats)}\n\n## Trades\n`;
@@ -252,7 +296,7 @@ function renderDailySummary(
 
 ${getJournalTypeLabel(journalType)} / ${symbol} / ${journalDate}
 
-| Trades | WIN | Thua | Hoà vốn | Win rate | Net RR | Avg RR | Best RR | Worst RR |
+| Trades | Win | Loss | Breakeven | Win rate | Net RR | Avg RR | Best RR | Worst RR |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | ${stats.tradeCount} | ${stats.winCount} | ${stats.lossCount} | ${stats.breakevenCount} | ${formatPercent(stats.winRate)} | ${formatRrValue(stats.netRr)} | ${formatRrValue(stats.averageRr)} | ${formatNullableRr(stats.bestRr)} | ${formatNullableRr(stats.worstRr)} |${invalidBlockWarning}
 ${SUMMARY_END}`;
@@ -283,7 +327,7 @@ function buildRebuiltNote(
 
 	const identity = getJournalIdentity(file, parsedFrontmatter, trades, fallbackIdentity);
 	const stats = calculateDailyTradeStats(trades, extractedTrades.invalidTradeBlockCount);
-	const metadata = createDailyMetadata(identity, stats);
+	const metadata = createDailyMetadata(identity, stats, parsedFrontmatter);
 	const summary = renderDailySummary(identity.symbol, identity.journalDate, identity.journalType, stats);
 	const bodyWithSummary = upsertSummary(ensureTradesSection(body), summary);
 
@@ -295,8 +339,12 @@ function buildRebuiltNote(
 	};
 }
 
-function createDailyMetadata(identity: JournalIdentity, stats: DailyTradeStats): Record<string, unknown> {
-	return {
+function createDailyMetadata(
+	identity: JournalIdentity,
+	stats: DailyTradeStats,
+	frontmatter: Record<string, unknown>,
+): Record<string, unknown> {
+	const metadata: Record<string, unknown> = {
 		type: getNoteType(identity.journalType),
 		schemaVersion: SCHEMA_VERSION,
 		journalType: identity.journalType,
@@ -314,6 +362,14 @@ function createDailyMetadata(identity: JournalIdentity, stats: DailyTradeStats):
 		winRate: roundNumber(stats.winRate),
 		tradeTags: stats.tags,
 	};
+
+	if (identity.journalType === 'backtest') {
+		metadata.backtest_start_date =
+			frontmatter.backtest_start_date === undefined ? null : frontmatter.backtest_start_date;
+		metadata.backtest_end_date = frontmatter.backtest_end_date === undefined ? null : frontmatter.backtest_end_date;
+	}
+
+	return metadata;
 }
 
 function getJournalIdentity(
