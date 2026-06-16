@@ -25,6 +25,7 @@ import { formatResult, formatSide, stringifyValue } from '../trades/format';
 import type { TradeJournalType } from '../trades/types';
 
 export const TRADER_JOURNAL_CALENDAR_VIEW_TYPE = 'trader-journal-calendar';
+export const TRADER_JOURNAL_CALENDAR_ICON = 'calendar-clock';
 
 const FILE_UPDATE_DEBOUNCE_MS = 250;
 
@@ -81,7 +82,7 @@ export class TraderJournalCalendarView extends ItemView {
 		super(leaf);
 		this.plugin = plugin;
 		this.navigation = false;
-		this.icon = 'calendar-days';
+		this.icon = TRADER_JOURNAL_CALENDAR_ICON;
 	}
 
 	getViewType(): string {
@@ -93,7 +94,7 @@ export class TraderJournalCalendarView extends ItemView {
 	}
 
 	getIcon(): string {
-		return 'calendar-days';
+		return TRADER_JOURNAL_CALENDAR_ICON;
 	}
 
 	async onOpen(): Promise<void> {
@@ -127,6 +128,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const [language, setLanguage] = useState<TraderJournalLanguage>(plugin.settings.language);
 	const [todayScrollRequest, setTodayScrollRequest] = useState(0);
 	const [selectedDateScrollRequest, setSelectedDateScrollRequest] = useState(0);
+	const [monthStartScrollTarget, setMonthStartScrollTarget] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const initialSelectionAppliedRef = useRef(false);
 	const previousFilterRef = useRef<TradeCalendarFilter>(journalTypeFilter);
@@ -343,16 +345,50 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		return () => window.clearTimeout(timer);
 	}, [calendarDisplayMode, horizontalCalendarDates, selectedDate, selectedDateScrollRequest]);
 
+	useEffect(() => {
+		if (calendarDisplayMode !== 'horizontal_calendar' || monthStartScrollTarget !== visibleMonth) {
+			return;
+		}
+
+		const calendarEl = horizontalCalendarRef.current;
+		if (!calendarEl) {
+			return;
+		}
+
+		const targetEl = calendarEl.querySelector<HTMLElement>(`[data-date="${visibleMonth}-01"]`);
+		if (!targetEl) {
+			return;
+		}
+
+		const timer = window.setTimeout(() => {
+			targetEl.scrollIntoView({
+				behavior: 'auto',
+				block: 'nearest',
+				inline: 'start',
+			});
+		}, 0);
+
+		return () => window.clearTimeout(timer);
+	}, [calendarDisplayMode, horizontalCalendarDates, monthStartScrollTarget, visibleMonth]);
+
 	const selectDate = (date: string) => {
+		setMonthStartScrollTarget(null);
 		setSelectedDate(date);
 		setVisibleMonth(getMonthKey(date));
 		setSelectedDateScrollRequest((currentRequest) => currentRequest + 1);
 	};
 
 	const goToToday = () => {
+		setMonthStartScrollTarget(null);
 		setSelectedDate(today);
 		setVisibleMonth(getMonthKey(today));
 		setTodayScrollRequest((currentRequest) => currentRequest + 1);
+	};
+
+	const goToAdjacentMonth = (offset: number) => {
+		const nextMonth = addMonths(visibleMonth, offset);
+		setVisibleMonth(nextMonth);
+		setMonthStartScrollTarget(nextMonth);
 	};
 
 	const openCreateTradeModal = () => {
@@ -366,7 +402,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 					type="button"
 					className="trader-journal-calendar__nav-button"
 					aria-label={tr('calendar.previousMonth')}
-					onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
+					onClick={() => goToAdjacentMonth(-1)}
 				>
 					‹
 				</button>
@@ -375,7 +411,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 					type="button"
 					className="trader-journal-calendar__nav-button"
 					aria-label={tr('calendar.nextMonth')}
-					onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
+					onClick={() => goToAdjacentMonth(1)}
 				>
 					›
 				</button>
@@ -854,10 +890,16 @@ function parseDateKey(dateKey: string): Date | null {
 
 function formatMonthLabel(monthKey: string, locale: string | undefined): string {
 	const { year, month } = parseMonthKey(monthKey);
-	return new Date(year, month, 1).toLocaleString(locale, {
+	const monthLabel = new Date(year, month, 1).toLocaleString(locale, {
 		month: 'long',
 		year: 'numeric',
 	});
+	return capitalizeFirstLetter(monthLabel);
+}
+
+function capitalizeFirstLetter(value: string): string {
+	const firstLetter = value.slice(0, 1);
+	return firstLetter ? `${firstLetter.toLocaleUpperCase()}${value.slice(1)}` : value;
 }
 
 function formatTradeTime(value: string): string {

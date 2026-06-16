@@ -2,7 +2,11 @@ import { Plugin } from 'obsidian';
 import { registerCommands } from './commands';
 import { normalizeSettings, TraderJournalSettings } from './settings';
 import { TraderJournalSettingTab } from './ui/SettingsTab';
-import { openTraderJournalCalendar, registerTraderJournalCalendarView } from './ui/TradeCalendarView';
+import {
+	openTraderJournalCalendar,
+	registerTraderJournalCalendarView,
+	TRADER_JOURNAL_CALENDAR_ICON,
+} from './ui/TradeCalendarView';
 import { registerAutoStatsRebuild } from './trades/autoRebuild';
 import { registerTradeBlockProcessor } from './trades/tradeBlockProcessor';
 import { getTranslator } from './i18n';
@@ -14,7 +18,7 @@ export default class TraderJournalPlugin extends Plugin {
 		await this.loadSettings();
 		const tr = getTranslator(this.settings.language);
 
-		this.addRibbonIcon('calendar-days', tr('command.openTradeCalendar'), () => {
+		this.addRibbonIcon(TRADER_JOURNAL_CALENDAR_ICON, tr('command.openTradeCalendar'), () => {
 			void openTraderJournalCalendar(this);
 		});
 

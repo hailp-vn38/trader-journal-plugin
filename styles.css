@@ -541,14 +541,37 @@ button.trader-journal-trade-card__edit-button svg {
 	white-space: nowrap;
 }
 
-.trader-journal-calendar__nav-button,
-.trader-journal-calendar__today-button {
+.trader-journal-calendar button.trader-journal-calendar__nav-button,
+.trader-journal-calendar button.trader-journal-calendar__today-button {
 	height: 28px;
 	min-width: 28px;
+	border: 1px solid transparent;
+	border-radius: 5px;
+	background: transparent;
+	background-color: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--text-muted);
 	padding: 0 8px;
 }
 
-.trader-journal-calendar__nav-button {
+.trader-journal-calendar button.trader-journal-calendar__nav-button:hover,
+.trader-journal-calendar button.trader-journal-calendar__nav-button:active,
+.trader-journal-calendar button.trader-journal-calendar__nav-button:focus,
+.trader-journal-calendar button.trader-journal-calendar__nav-button:focus-visible,
+.trader-journal-calendar button.trader-journal-calendar__today-button:hover,
+.trader-journal-calendar button.trader-journal-calendar__today-button:active,
+.trader-journal-calendar button.trader-journal-calendar__today-button:focus,
+.trader-journal-calendar button.trader-journal-calendar__today-button:focus-visible {
+	border-color: var(--background-modifier-border);
+	background: var(--background-modifier-hover);
+	background-color: var(--background-modifier-hover);
+	background-image: none;
+	box-shadow: none;
+	color: var(--text-normal);
+}
+
+.trader-journal-calendar button.trader-journal-calendar__nav-button {
 	padding: 0;
 	font-size: var(--font-ui-large);
 	line-height: 1;
@@ -568,7 +591,7 @@ button.trader-journal-trade-card__edit-button svg {
 	text-align: center;
 }
 
-.trader-journal-calendar-day {
+.trader-journal-calendar button.trader-journal-calendar-day {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -584,7 +607,8 @@ button.trader-journal-trade-card__edit-button svg {
 	padding: 2px;
 }
 
-.trader-journal-calendar-day:hover {
+.trader-journal-calendar button.trader-journal-calendar-day:hover {
+	border-color: var(--background-modifier-border);
 	background: var(--background-modifier-hover);
 }
 
@@ -592,13 +616,17 @@ button.trader-journal-trade-card__edit-button svg {
 	color: var(--text-faint);
 }
 
-.trader-journal-calendar-day--selected {
-	border-color: var(--interactive-accent);
+.trader-journal-calendar button.trader-journal-calendar-day--selected,
+.trader-journal-calendar button.trader-journal-calendar-day--selected:hover {
+	border-color: var(--background-modifier-border);
 	background: var(--background-modifier-hover);
+	background-color: var(--background-modifier-hover);
+	box-shadow: none;
 }
 
 .trader-journal-calendar-day--today .trader-journal-calendar-day__number {
 	box-shadow: inset 0 -2px 0 var(--interactive-accent);
+	padding: 0 4px 2px;
 }
 
 .trader-journal-calendar-day__number {
@@ -649,7 +677,7 @@ button.trader-journal-trade-card__edit-button svg {
 	display: none;
 }
 
-.trader-journal-horizontal-calendar-day {
+.trader-journal-calendar button.trader-journal-horizontal-calendar-day {
 	display: grid;
 	grid-template-rows: 8px auto auto;
 	align-items: center;
@@ -657,24 +685,35 @@ button.trader-journal-trade-card__edit-button svg {
 	gap: 2px;
 	min-width: 46px;
 	height: 58px;
-	border: 1px solid var(--background-modifier-border);
+	border: 1px solid transparent;
 	border-radius: 6px;
-	background: var(--background-primary);
+	background: transparent;
+	background-color: transparent;
+	background-image: none;
+	box-shadow: none;
 	color: var(--text-normal);
 	padding: 5px 4px;
 }
 
-.trader-journal-horizontal-calendar-day:hover {
+.trader-journal-calendar button.trader-journal-horizontal-calendar-day:hover {
+	border-color: var(--background-modifier-border);
 	background: var(--background-modifier-hover);
+	background-color: var(--background-modifier-hover);
+	background-image: none;
+	box-shadow: none;
 }
 
-.trader-journal-horizontal-calendar-day--selected {
-	border-color: var(--interactive-accent);
+.trader-journal-calendar button.trader-journal-horizontal-calendar-day--selected,
+.trader-journal-calendar button.trader-journal-horizontal-calendar-day--selected:hover {
+	border-color: var(--background-modifier-border);
 	background: var(--background-modifier-hover);
+	background-color: var(--background-modifier-hover);
+	box-shadow: none;
 }
 
 .trader-journal-horizontal-calendar-day--today .trader-journal-horizontal-calendar-day__number {
 	box-shadow: inset 0 -2px 0 var(--interactive-accent);
+	padding: 0 4px 2px;
 }
 
 .trader-journal-horizontal-calendar-day__weekday {
@@ -716,7 +755,7 @@ button.trader-journal-trade-card__edit-button svg {
 	min-width: 0;
 }
 
-.trader-journal-calendar__icon-button {
+.trader-journal-calendar button.trader-journal-calendar__icon-button {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -724,6 +763,13 @@ button.trader-journal-trade-card__edit-button svg {
 	height: 30px;
 	min-width: 30px;
 	min-height: 30px;
+	border: 1px solid transparent;
+	border-radius: 5px;
+	background: transparent;
+	background-color: transparent;
+	background-image: none;
+	box-shadow: none;
+	color: var(--text-muted);
 	padding: 0;
 }
 
@@ -732,25 +778,19 @@ button.trader-journal-trade-card__edit-button svg {
 	height: 16px;
 }
 
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain,
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:hover,
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:active,
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus,
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus-visible {
-	border: 0;
-	border-radius: 0;
-	background: transparent;
-	background-color: transparent;
+.trader-journal-calendar button.trader-journal-calendar__icon-button:hover,
+.trader-journal-calendar button.trader-journal-calendar__icon-button:active,
+.trader-journal-calendar button.trader-journal-calendar__icon-button:focus,
+.trader-journal-calendar button.trader-journal-calendar__icon-button:focus-visible,
+.trader-journal-calendar button.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:hover,
+.trader-journal-calendar button.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:active,
+.trader-journal-calendar button.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus,
+.trader-journal-calendar button.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus-visible {
+	border-color: var(--background-modifier-border);
+	background: var(--background-modifier-hover);
+	background-color: var(--background-modifier-hover);
 	background-image: none;
 	box-shadow: none;
-}
-
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain {
-	color: var(--text-muted);
-}
-
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:hover,
-.trader-journal-calendar__icon-button.trader-journal-calendar__icon-button--plain:focus-visible {
 	color: var(--text-normal);
 }
 
@@ -771,6 +811,23 @@ button.trader-journal-trade-card__edit-button svg {
 	flex: 0 0 auto;
 	min-width: 0;
 	height: 30px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 5px;
+	background: var(--background-secondary);
+	background-color: var(--background-secondary);
+	box-shadow: none;
+	color: var(--text-normal);
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.trader-journal-calendar__filter:hover,
+.trader-journal-calendar__filter:active,
+.trader-journal-calendar__filter:focus,
+.trader-journal-calendar__filter:focus-visible {
+	border-color: var(--interactive-accent);
+	background-color: var(--background-modifier-hover);
+	box-shadow: none;
 }
 
 .trader-journal-calendar__day-count,
