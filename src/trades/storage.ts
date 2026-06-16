@@ -26,6 +26,7 @@ export interface DailyTradeStats {
 	winCount: number;
 	lossCount: number;
 	breakevenCount: number;
+	invalidTradeBlockCount: number;
 	netRr: number;
 	averageRr: number;
 	bestRr: number | null;
@@ -50,6 +51,11 @@ interface RebuiltNote {
 	metadata: Record<string, unknown>;
 	stats: DailyTradeStats;
 	skipped: boolean;
+}
+
+interface ExtractedTrades {
+	trades: TradeEntry[];
+	invalidTradeBlockCount: number;
 }
 
 export async function saveTradeToDailyNote(
@@ -202,6 +208,7 @@ function renderInitialNote(symbol: string, journalDate: string): string {
 		winCount: 0,
 		lossCount: 0,
 		breakevenCount: 0,
+		invalidTradeBlockCount: 0,
 		netRr: 0,
 		averageRr: 0,
 		bestRr: null,
@@ -231,6 +238,12 @@ function renderTradeHeading(trade: TradeEntry): string {
 }
 
 function renderDailySummary(symbol: string, journalDate: string, stats: DailyTradeStats): string {
+	const invalidBlockLabel = stats.invalidTradeBlockCount === 1 ? 'block was' : 'blocks were';
+	const invalidBlockWarning =
+		stats.invalidTradeBlockCount === 0
+			? ''
+			: `\n\n> ${stats.invalidTradeBlockCount} invalid trade ${invalidBlockLabel} skipped. Fix invalid JSON before relying on these stats.`;
+
 	return `${SUMMARY_START}
 ## Summary
 
@@ -238,7 +251,7 @@ ${symbol} / ${journalDate}
 
 | Trades | WIN | Thua | Hoà vốn | Win rate | Net RR | Avg RR | Best RR | Worst RR |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ${stats.tradeCount} | ${stats.winCount} | ${stats.lossCount} | ${stats.breakevenCount} | ${formatPercent(stats.winRate)} | ${formatRrValue(stats.netRr)} | ${formatRrValue(stats.averageRr)} | ${formatNullableRr(stats.bestRr)} | ${formatNullableRr(stats.worstRr)} |
+| ${stats.tradeCount} | ${stats.winCount} | ${stats.lossCount} | ${stats.breakevenCount} | ${formatPercent(stats.winRate)} | ${formatRrValue(stats.netRr)} | ${formatRrValue(stats.averageRr)} | ${formatNullableRr(stats.bestRr)} | ${formatNullableRr(stats.worstRr)} |${invalidBlockWarning}
 ${SUMMARY_END}`;
 }
 
@@ -249,7 +262,8 @@ function buildRebuiltNote(
 ): RebuiltNote {
 	const { frontmatter, body } = splitFrontmatter(content);
 	const parsedFrontmatter = parseFrontmatter(frontmatter);
-	const trades = extractTrades(body);
+	const extractedTrades = extractTrades(body);
+	const { trades } = extractedTrades;
 	const isJournalNote =
 		stringifyValue(parsedFrontmatter.type) === NOTE_TYPE ||
 		body.includes(`\`\`\`${TRADE_CODE_BLOCK_LANGUAGE}`) ||
@@ -265,7 +279,7 @@ function buildRebuiltNote(
 	}
 
 	const identity = getJournalIdentity(file, parsedFrontmatter, trades, fallbackIdentity);
-	const stats = calculateDailyTradeStats(trades);
+	const stats = calculateDailyTradeStats(trades, extractedTrades.invalidTradeBlockCount);
 	const metadata = createDailyMetadata(identity, stats);
 	const summary = renderDailySummary(identity.symbol, identity.journalDate, stats);
 	const bodyWithSummary = upsertSummary(ensureTradesSection(body), summary);
@@ -288,6 +302,7 @@ function createDailyMetadata(identity: JournalIdentity, stats: DailyTradeStats):
 		winCount: stats.winCount,
 		lossCount: stats.lossCount,
 		breakevenCount: stats.breakevenCount,
+		invalidTradeBlockCount: stats.invalidTradeBlockCount,
 		netRr: roundNumber(stats.netRr),
 		averageRr: roundNumber(stats.averageRr),
 		bestRr: stats.bestRr === null ? null : roundNumber(stats.bestRr),
@@ -378,25 +393,32 @@ function parseFrontmatter(frontmatter: string): Record<string, unknown> {
 	return isRecord(parsed) ? parsed : {};
 }
 
-function extractTrades(body: string): TradeEntry[] {
+function extractTrades(body: string): ExtractedTrades {
 	const trades: TradeEntry[] = [];
+	let invalidTradeBlockCount = 0;
 
 	for (const match of body.matchAll(TRADE_BLOCK_PATTERN)) {
 		const source = match[1];
-		if (!source) {
+		if (!source?.trim()) {
+			invalidTradeBlockCount += 1;
 			continue;
 		}
 
 		const { trade } = parseTradeJson(source);
 		if (trade) {
 			trades.push(trade);
+		} else {
+			invalidTradeBlockCount += 1;
 		}
 	}
 
-	return trades;
+	return {
+		trades,
+		invalidTradeBlockCount,
+	};
 }
 
-function calculateDailyTradeStats(trades: TradeEntry[]): DailyTradeStats {
+function calculateDailyTradeStats(trades: TradeEntry[], invalidTradeBlockCount: number): DailyTradeStats {
 	const rrValues = trades.map((trade) => getSignedRr(trade));
 	const netRr = rrValues.reduce((total, rr) => total + rr, 0);
 	const winCount = trades.filter((trade) => getResultKey(trade) === 'win').length;
@@ -409,6 +431,7 @@ function calculateDailyTradeStats(trades: TradeEntry[]): DailyTradeStats {
 		winCount,
 		lossCount,
 		breakevenCount,
+		invalidTradeBlockCount,
 		netRr,
 		averageRr: trades.length ? netRr / trades.length : 0,
 		bestRr: rrValues.length ? Math.max(...rrValues) : null,
@@ -470,6 +493,7 @@ function getEmptyStats(): DailyTradeStats {
 		winCount: 0,
 		lossCount: 0,
 		breakevenCount: 0,
+		invalidTradeBlockCount: 0,
 		netRr: 0,
 		averageRr: 0,
 		bestRr: null,

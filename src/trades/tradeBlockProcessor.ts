@@ -160,6 +160,14 @@ function renderImage(
 	const source = resolveImageSource(plugin, image, ctx.sourcePath);
 	const label = image.label ?? image.value;
 
+	if (image.type === 'url' && !plugin.settings.allowRemoteImages) {
+		figureEl.createDiv({
+			cls: 'trader-journal-trade-image__missing',
+			text: 'Remote image previews are disabled',
+		});
+		return;
+	}
+
 	if (source) {
 		const imageButtonEl = figureEl.createDiv({
 			cls: 'trader-journal-trade-image-button',
@@ -209,24 +217,13 @@ class TradeImageModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.containerEl.addClass('trader-journal-image-modal-container');
 		this.modalEl.addClass('trader-journal-image-modal-shell');
-		this.titleEl.addClass('trader-journal-image-modal-title');
-		this.titleEl.empty();
+		this.titleEl.setText(this.label);
 		this.contentEl.addClass('trader-journal-image-modal-content');
 		this.contentEl.empty();
 
-		const closeButtonEl = this.contentEl.createEl('button', {
-			cls: 'trader-journal-image-modal-close',
-			text: 'X',
-			attr: {
-				type: 'button',
-				'aria-label': 'Close image preview',
-			},
-		});
-		closeButtonEl.addEventListener('click', () => this.close());
-
-		this.contentEl.createEl('img', {
+		const frameEl = this.contentEl.createDiv({ cls: 'trader-journal-image-modal-frame' });
+		frameEl.createEl('img', {
 			attr: {
 				src: this.source,
 				alt: this.label,
@@ -235,9 +232,7 @@ class TradeImageModal extends Modal {
 	}
 
 	onClose(): void {
-		this.containerEl.removeClass('trader-journal-image-modal-container');
 		this.modalEl.removeClass('trader-journal-image-modal-shell');
-		this.titleEl.removeClass('trader-journal-image-modal-title');
 		this.contentEl.removeClass('trader-journal-image-modal-content');
 		this.contentEl.empty();
 	}
@@ -315,7 +310,7 @@ function resolveImageSource(
 	sourcePath: string,
 ): string | null {
 	if (image.type === 'url') {
-		return image.value;
+		return plugin.settings.allowRemoteImages ? image.value : null;
 	}
 
 	const file = findVaultFile(plugin, image.value, sourcePath);

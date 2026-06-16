@@ -9,7 +9,7 @@ Trader Journal is an Obsidian plugin for recording backtest trades in Markdown n
 - Configure journal folder, symbols, and timeframes in settings.
 - Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
 - Auto-calculate holding time from opened and closed timestamps.
-- Paste image files directly into the Images input; pasted images are saved to the vault.
+- Paste image files directly into the Images input; unsaved pasted images are moved to trash if the modal closes without saving.
 - Render trade JSON blocks as cards in Reading View.
 - Click a rendered image to open a full-screen image preview.
 - Recalculate daily statistics automatically when a journal note changes.
@@ -17,7 +17,7 @@ Trader Journal is an Obsidian plugin for recording backtest trades in Markdown n
 
 ## Storage Layout
 
-Journal files are created under the configured journal folder:
+Journal files are created under the configured journal folder. The daily file date is the day you record the backtest journal entry, not necessarily the trade execution date inside the backtest data.
 
 ```text
 Trading/Backtests/
@@ -70,7 +70,7 @@ Trades are stored as fenced JSON code blocks:
 ```
 ````
 
-The JSON block is the source of truth. The summary table and frontmatter statistics are regenerated from the trade blocks.
+The JSON block is the source of truth. The summary table and frontmatter statistics are regenerated from the trade blocks. Invalid trade JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` so they are not silently hidden from the daily stats.
 
 ## Commands
 
@@ -82,6 +82,13 @@ The JSON block is the source of truth. The summary table and frontmatter statist
 - **Journal folder**: Root folder for generated journal files.
 - **Symbols**: Symbols shown in the trade modal.
 - **Timeframes**: Timeframes shown in the trade modal.
+- **Remote images**: Allows image previews from external URLs. This is disabled by default.
+
+## Privacy
+
+Trader Journal works locally by default. Pasted images are saved inside the vault under `_attachments`; if you close the trade modal without saving, temporary pasted images are moved to trash.
+
+Remote image previews are disabled by default. If you enable **Remote images**, opening notes with external image URLs may send requests to those image hosts.
 
 ## Development
 

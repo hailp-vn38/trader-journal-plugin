@@ -2,12 +2,14 @@ export interface TraderJournalSettings {
 	journalFolder: string;
 	symbols: string[];
 	timeframes: string[];
+	allowRemoteImages: boolean;
 }
 
 export const DEFAULT_SETTINGS: TraderJournalSettings = {
 	journalFolder: 'Trading/Backtests',
 	symbols: ['NQ', 'ES'],
 	timeframes: ['1m', '3m', '5m', '15m', '1h'],
+	allowRemoteImages: false,
 };
 
 export function normalizeSettings(settings: Partial<TraderJournalSettings> | null | undefined): TraderJournalSettings {
@@ -15,6 +17,7 @@ export function normalizeSettings(settings: Partial<TraderJournalSettings> | nul
 		journalFolder: settings?.journalFolder?.trim() || DEFAULT_SETTINGS.journalFolder,
 		symbols: normalizeStringList(settings?.symbols, DEFAULT_SETTINGS.symbols, normalizeSymbol),
 		timeframes: normalizeStringList(settings?.timeframes, DEFAULT_SETTINGS.timeframes, normalizeTimeframe),
+		allowRemoteImages: settings?.allowRemoteImages === true,
 	};
 }
 
@@ -27,13 +30,15 @@ export function normalizeTimeframe(value: string): string {
 }
 
 function normalizeStringList(
-	values: string[] | undefined,
+	values: unknown,
 	fallback: string[],
 	normalize: (value: string) => string,
 ): string[] {
-	const normalizedValues = (values?.length ? values : fallback)
-		.map((value) => normalize(value))
+	const sourceValues = Array.isArray(values) && values.length ? values : fallback;
+	const normalizedValues = sourceValues
+		.map((value) => (typeof value === 'string' ? normalize(value) : ''))
 		.filter(Boolean);
 
-	return [...new Set(normalizedValues)];
+	const uniqueValues = [...new Set(normalizedValues)];
+	return uniqueValues.length ? uniqueValues : [...new Set(fallback.map((value) => normalize(value)).filter(Boolean))];
 }

@@ -35,7 +35,14 @@ async function recalculateCurrentJournalStats(plugin: TraderJournalPlugin): Prom
 			return;
 		}
 
-		new Notice(`Recalculated ${result.stats.tradeCount} trade${result.stats.tradeCount === 1 ? '' : 's'}.`);
+		const invalidBlockSuffix = result.stats.invalidTradeBlockCount === 1 ? '' : 's';
+		const invalidBlockMessage =
+			result.stats.invalidTradeBlockCount > 0
+				? ` ${result.stats.invalidTradeBlockCount} invalid block${invalidBlockSuffix} skipped.`
+				: '';
+		new Notice(
+			`Recalculated ${result.stats.tradeCount} trade${result.stats.tradeCount === 1 ? '' : 's'}.${invalidBlockMessage}`,
+		);
 	} catch (error) {
 		new Notice(error instanceof Error ? error.message : 'Could not recalculate stats.');
 	}

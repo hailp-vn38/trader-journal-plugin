@@ -17,6 +17,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const [newSymbol, setNewSymbol] = useState('');
 	const [timeframes, setTimeframes] = useState(plugin.settings.timeframes);
 	const [newTimeframe, setNewTimeframe] = useState('');
+	const [allowRemoteImages, setAllowRemoteImages] = useState(plugin.settings.allowRemoteImages);
 
 	const saveJournalFolder = (value: string) => {
 		setJournalFolder(value);
@@ -25,14 +26,28 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	};
 
 	const saveSymbols = (nextSymbols: string[]) => {
+		if (nextSymbols.length === 0) {
+			return;
+		}
+
 		setSymbols(nextSymbols);
 		plugin.settings.symbols = nextSymbols;
 		void plugin.saveSettings();
 	};
 
 	const saveTimeframes = (nextTimeframes: string[]) => {
+		if (nextTimeframes.length === 0) {
+			return;
+		}
+
 		setTimeframes(nextTimeframes);
 		plugin.settings.timeframes = nextTimeframes;
+		void plugin.saveSettings();
+	};
+
+	const saveAllowRemoteImages = (value: boolean) => {
+		setAllowRemoteImages(value);
+		plugin.settings.allowRemoteImages = value;
 		void plugin.saveSettings();
 	};
 
@@ -48,6 +63,10 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	};
 
 	const removeSymbol = (symbol: string) => {
+		if (symbols.length <= 1) {
+			return;
+		}
+
 		saveSymbols(symbols.filter((item) => item !== symbol));
 	};
 
@@ -63,6 +82,10 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	};
 
 	const removeTimeframe = (timeframe: string) => {
+		if (timeframes.length <= 1) {
+			return;
+		}
+
 		saveTimeframes(timeframes.filter((item) => item !== timeframe));
 	};
 
@@ -81,9 +104,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 
 			<label className="trader-journal-setting">
 				<span className="trader-journal-setting__label">Journal folder</span>
-				<span className="trader-journal-setting__description">
-					Root folder for symbol daily notes.
-				</span>
+				<span className="trader-journal-setting__description">Root folder for symbol daily notes.</span>
 				<input
 					type="text"
 					value={journalFolder}
@@ -92,12 +113,27 @@ function SettingsView({ plugin }: SettingsViewProps) {
 				/>
 			</label>
 
+			<section className="trader-journal-setting">
+				<div>
+					<div className="trader-journal-setting__label">Remote images</div>
+					<div className="trader-journal-setting__description">
+						Load image previews from external URLs in trade blocks.
+					</div>
+				</div>
+				<label className="trader-journal-toggle">
+					<input
+						type="checkbox"
+						checked={allowRemoteImages}
+						onChange={(event: ChangeEvent<HTMLInputElement>) => saveAllowRemoteImages(event.target.checked)}
+					/>
+					<span>Allow remote image previews</span>
+				</label>
+			</section>
+
 			<section className="trader-journal-setting trader-journal-setting--list">
 				<div>
 					<div className="trader-journal-setting__label">Symbols</div>
-					<div className="trader-journal-setting__description">
-						Symbols available in the trade modal.
-					</div>
+					<div className="trader-journal-setting__description">Symbols available in the trade modal.</div>
 				</div>
 				<div className="trader-journal-setting__control">
 					<div className="trader-journal-add-row">
@@ -116,7 +152,12 @@ function SettingsView({ plugin }: SettingsViewProps) {
 						{symbols.map((symbol) => (
 							<span className="trader-journal-pill" key={symbol}>
 								<span>{symbol}</span>
-								<button type="button" aria-label={`Remove ${symbol}`} onClick={() => removeSymbol(symbol)}>
+								<button
+									type="button"
+									aria-label={`Remove ${symbol}`}
+									disabled={symbols.length <= 1}
+									onClick={() => removeSymbol(symbol)}
+								>
 									Remove
 								</button>
 							</span>
@@ -128,9 +169,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 			<section className="trader-journal-setting trader-journal-setting--list">
 				<div>
 					<div className="trader-journal-setting__label">Timeframes</div>
-					<div className="trader-journal-setting__description">
-						Timeframes available in the trade modal.
-					</div>
+					<div className="trader-journal-setting__description">Timeframes available in the trade modal.</div>
 				</div>
 				<div className="trader-journal-setting__control">
 					<div className="trader-journal-add-row">
@@ -152,6 +191,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 								<button
 									type="button"
 									aria-label={`Remove ${timeframe}`}
+									disabled={timeframes.length <= 1}
 									onClick={() => removeTimeframe(timeframe)}
 								>
 									Remove

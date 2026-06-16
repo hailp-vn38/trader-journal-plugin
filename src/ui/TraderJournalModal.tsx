@@ -1,6 +1,6 @@
 import type { App } from 'obsidian';
 import { Modal, Notice, TFile, TFolder, normalizePath } from 'obsidian';
-import { StrictMode, useMemo, useState } from 'react';
+import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent, SyntheticEvent } from 'react';
 import type { Root } from 'react-dom/client';
@@ -20,9 +20,9 @@ const SIDE_OPTIONS: Array<{ value: TradeSide; label: string }> = [
 ];
 
 const RESULT_OPTIONS: Array<{ value: TradeResult; label: string }> = [
-	{ value: 'loss', label: 'Thua' },
-	{ value: 'win', label: 'WIN' },
-	{ value: 'breakeven', label: 'Hoà vốn' },
+	{ value: 'loss', label: 'Loss' },
+	{ value: 'win', label: 'Win' },
+	{ value: 'breakeven', label: 'Breakeven' },
 ];
 
 interface TraderJournalModalContentProps {
@@ -62,8 +62,19 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 	const [error, setError] = useState('');
 	const [isSaving, setIsSaving] = useState(false);
 	const [isPastingImage, setIsPastingImage] = useState(false);
+	const createdAttachmentPathsRef = useRef<Set<string>>(new Set());
+	const savedTradeRef = useRef(false);
 
 	const holdingTime = useMemo(() => calculateHoldingTime(form.openedAt, form.closedAt), [form.openedAt, form.closedAt]);
+
+	useEffect(
+		() => () => {
+			if (!savedTradeRef.current) {
+				cleanupCreatedAttachments(plugin, createdAttachmentPathsRef.current);
+			}
+		},
+		[plugin],
+	);
 
 	function updateField<K extends keyof TradeFormState>(field: K, value: TradeFormState[K]) {
 		setForm((currentForm) => ({
@@ -100,6 +111,14 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 	};
 
 	const removeImage = (index: number) => {
+		const image = form.images[index];
+		if (image?.type === 'file' && image.value && createdAttachmentPathsRef.current.has(image.value)) {
+			createdAttachmentPathsRef.current.delete(image.value);
+			void deleteCreatedAttachment(plugin, image.value).catch((deleteError: unknown) => {
+				console.error('Trader Journal failed to remove pasted image', deleteError);
+			});
+		}
+
 		updateField(
 			'images',
 			form.images.filter((_, itemIndex) => itemIndex !== index),
@@ -132,6 +151,11 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 			const savedImages = await Promise.all(
 				imageFiles.map((imageFile) => savePastedImage(plugin, imageFile, form.symbol)),
 			);
+			for (const image of savedImages) {
+				if (image.type === 'file' && image.value) {
+					createdAttachmentPathsRef.current.add(image.value);
+				}
+			}
 			addImages(savedImages);
 			setImageInput('');
 		} catch (pasteError) {
@@ -187,6 +211,8 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 			setIsSaving(true);
 			setError('');
 			const file = await saveTradeToDailyNote(plugin, journalDate, trade);
+			savedTradeRef.current = true;
+			createdAttachmentPathsRef.current.clear();
 			new Notice(`Saved trade to ${file.path}`);
 			closeModal();
 		} catch (saveError) {
@@ -454,17 +480,23 @@ function createTradeImage(value: string): TradeImage | null {
 }
 
 function getClipboardImageFiles(clipboardData: DataTransfer): File[] {
-	const imageFiles = [
-		...Array.from(clipboardData.files).filter(isImageFile),
-		...Array.from(clipboardData.items)
-			.filter((item) => item.kind === 'file')
-			.map((item) => item.getAsFile())
-			.filter((file): file is File => file !== null && isImageFile(file)),
-	];
+	const itemImageFiles = Array.from(clipboardData.items)
+		.filter((item) => item.kind === 'file')
+		.map((item) => item.getAsFile())
+		.filter((file): file is File => file !== null && isImageFile(file));
+
+	if (itemImageFiles.length > 0) {
+		return dedupeImageFiles(itemImageFiles);
+	}
+
+	return dedupeImageFiles(Array.from(clipboardData.files).filter(isImageFile));
+}
+
+function dedupeImageFiles(imageFiles: File[]): File[] {
 	const seenKeys = new Set<string>();
 
 	return imageFiles.filter((file) => {
-		const key = `${file.name}-${file.type}-${file.size}-${file.lastModified}`;
+		const key = `${file.name}-${file.type}-${file.size}`;
 		if (seenKeys.has(key)) {
 			return false;
 		}
@@ -493,6 +525,24 @@ async function savePastedImage(
 		type: 'file',
 		value: attachmentPath,
 	};
+}
+
+function cleanupCreatedAttachments(plugin: TraderJournalPlugin, attachmentPaths: Set<string>): void {
+	for (const attachmentPath of attachmentPaths) {
+		void deleteCreatedAttachment(plugin, attachmentPath).catch((deleteError: unknown) => {
+			console.error('Trader Journal failed to clean up pasted image', deleteError);
+		});
+	}
+
+	attachmentPaths.clear();
+}
+
+async function deleteCreatedAttachment(plugin: TraderJournalPlugin, attachmentPath: string): Promise<void> {
+	const abstractFile = plugin.app.vault.getAbstractFileByPath(attachmentPath);
+	if (abstractFile instanceof TFile) {
+		// eslint-disable-next-line obsidianmd/prefer-file-manager-trash-file -- FileManager.trashFile requires Obsidian 1.6.6; this plugin supports 1.4.4.
+		await plugin.app.vault.trash(abstractFile, true);
+	}
 }
 
 function getAttachmentFolder(plugin: TraderJournalPlugin): string {
@@ -585,6 +635,7 @@ function sanitizeFileNamePart(value: string): string {
 function ImagePreview({ plugin, image }: { plugin: TraderJournalPlugin; image: TradeImage }) {
 	const value = image.value ?? '';
 	const source = resolveImagePreviewSource(plugin, image);
+	const isRemoteImage = image.type === 'url' || /^https?:\/\//i.test(value);
 
 	if (source) {
 		return (
@@ -597,7 +648,9 @@ function ImagePreview({ plugin, image }: { plugin: TraderJournalPlugin; image: T
 
 	return (
 		<>
-			<div className="trader-journal-image-preview__missing">No preview</div>
+			<div className="trader-journal-image-preview__missing">
+				{isRemoteImage && !plugin.settings.allowRemoteImages ? 'Remote preview disabled' : 'No preview'}
+			</div>
 			<span>{value}</span>
 		</>
 	);
@@ -610,7 +663,7 @@ function resolveImagePreviewSource(plugin: TraderJournalPlugin, image: TradeImag
 	}
 
 	if (image.type === 'url' || /^https?:\/\//i.test(value)) {
-		return value;
+		return plugin.settings.allowRemoteImages ? value : null;
 	}
 
 	const file = findVaultImage(plugin, value);
