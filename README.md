@@ -9,7 +9,7 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 - Store one file per symbol per day.
 - Configure journal folder, symbols, and timeframes in settings.
 - Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
-- Track live entry price, exit price, take profit, and auto-calculated RR.
+- Track live entry price, stop loss, exit price, take profit, and auto-calculated RR.
 - Auto-calculate holding time from opened and closed timestamps.
 - Paste image files directly into the Images input; unsaved pasted images are moved to trash if the modal closes without saving.
 - Render trade JSON blocks as cards in Reading View.
@@ -81,7 +81,7 @@ Trades are stored as fenced JSON code blocks:
 
 The JSON block is the source of truth. The summary table and frontmatter statistics are regenerated from the trade blocks. Invalid trade JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` so they are not silently hidden from the daily stats.
 
-Live trade RR is calculated automatically. The plugin treats the distance from `entry_price` to `take_profit` as 1R. For long trades it uses `(exit_price - entry_price) / abs(take_profit - entry_price)`. For short trades it uses `(entry_price - exit_price) / abs(entry_price - take_profit)`.
+Live trade RR is calculated automatically from actual risk. For long trades it uses `(exit_price - entry_price) / (entry_price - stop_loss)`. For short trades it uses `(entry_price - exit_price) / (stop_loss - entry_price)`.
 
 ## Commands
 

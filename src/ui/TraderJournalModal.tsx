@@ -40,6 +40,7 @@ interface TradeFormState {
 	rr: string;
 	tags: string;
 	entryPrice: string;
+	stopLoss: string;
 	exitPrice: string;
 	takeProfit: string;
 	images: TradeImage[];
@@ -58,6 +59,7 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 		rr: '',
 		tags: '',
 		entryPrice: '',
+		stopLoss: '',
 		exitPrice: '',
 		takeProfit: '',
 		images: [],
@@ -74,8 +76,8 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 
 	const holdingTime = useMemo(() => calculateHoldingTime(form.openedAt, form.closedAt), [form.openedAt, form.closedAt]);
 	const liveRr = useMemo(
-		() => calculateLiveRr(form.side, form.entryPrice, form.exitPrice, form.takeProfit),
-		[form.entryPrice, form.exitPrice, form.side, form.takeProfit],
+		() => calculateLiveRr(form.side, form.entryPrice, form.stopLoss, form.exitPrice),
+		[form.entryPrice, form.exitPrice, form.side, form.stopLoss],
 	);
 	const isLiveJournal = journalType === 'live';
 
@@ -92,6 +94,14 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 		setForm((currentForm) => ({
 			...currentForm,
 			[field]: value,
+		}));
+	}
+
+	function updateOpenedAt(openedAt: string) {
+		setForm((currentForm) => ({
+			...currentForm,
+			openedAt,
+			closedAt: syncClosedAtDate(openedAt, currentForm.openedAt, currentForm.closedAt),
 		}));
 	}
 
@@ -223,6 +233,7 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 			trade.tags = parseTags(form.tags);
 		} else {
 			trade.entry_price = Number(form.entryPrice);
+			trade.stop_loss = Number(form.stopLoss);
 			trade.exit_price = Number(form.exitPrice);
 			trade.take_profit = Number(form.takeProfit);
 		}
@@ -336,6 +347,18 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 				{isLiveJournal ? (
 					<>
 						<label className="trader-journal-field">
+							<span>Stop loss</span>
+							<input
+								type="number"
+								step="0.01"
+								value={form.stopLoss}
+								placeholder="99"
+								onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('stopLoss', event.target.value)}
+								required
+							/>
+						</label>
+
+						<label className="trader-journal-field">
 							<span>Exit price</span>
 							<input
 								type="number"
@@ -366,7 +389,7 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 					<input
 						type="datetime-local"
 						value={form.openedAt}
-						onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('openedAt', event.target.value)}
+						onChange={(event: ChangeEvent<HTMLInputElement>) => updateOpenedAt(event.target.value)}
 						required
 					/>
 				</label>
@@ -525,11 +548,16 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType): stri
 
 	if (journalType === 'live') {
 		const entryPrice = parseRequiredNumber(form.entryPrice);
+		const stopLoss = parseRequiredNumber(form.stopLoss);
 		const exitPrice = parseRequiredNumber(form.exitPrice);
 		const takeProfit = parseRequiredNumber(form.takeProfit);
 
 		if (entryPrice === null) {
 			return 'Entry price must be a number.';
+		}
+
+		if (stopLoss === null) {
+			return 'Stop loss must be a number.';
 		}
 
 		if (exitPrice === null) {
@@ -540,16 +568,24 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType): stri
 			return 'Take profit must be a number.';
 		}
 
+		if (form.side === 'long' && stopLoss >= entryPrice) {
+			return 'Long stop loss must be below entry price.';
+		}
+
 		if (form.side === 'long' && takeProfit <= entryPrice) {
 			return 'Long take profit must be above entry price.';
+		}
+
+		if (form.side === 'short' && stopLoss <= entryPrice) {
+			return 'Short stop loss must be above entry price.';
 		}
 
 		if (form.side === 'short' && takeProfit >= entryPrice) {
 			return 'Short take profit must be below entry price.';
 		}
 
-		if (calculateLiveRr(form.side, form.entryPrice, form.exitPrice, form.takeProfit) === null) {
-			return 'Take profit must be different from entry price.';
+		if (calculateLiveRr(form.side, form.entryPrice, form.stopLoss, form.exitPrice) === null) {
+			return 'Stop loss must be different from entry price.';
 		}
 	}
 
@@ -564,21 +600,21 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType): stri
 	return null;
 }
 
-function calculateLiveRr(side: TradeSide, entryPrice: string, exitPrice: string, takeProfit: string): number | null {
+function calculateLiveRr(side: TradeSide, entryPrice: string, stopLoss: string, exitPrice: string): number | null {
 	const entry = parseRequiredNumber(entryPrice);
+	const stop = parseRequiredNumber(stopLoss);
 	const exit = parseRequiredNumber(exitPrice);
-	const target = parseRequiredNumber(takeProfit);
-	if (entry === null || exit === null || target === null) {
+	if (entry === null || stop === null || exit === null) {
 		return null;
 	}
 
-	const plannedMove = Math.abs(target - entry);
-	if (plannedMove === 0) {
+	const risk = side === 'short' ? stop - entry : entry - stop;
+	if (risk <= 0) {
 		return null;
 	}
 
 	const realizedMove = side === 'short' ? entry - exit : exit - entry;
-	return roundNumber(realizedMove / plannedMove);
+	return roundNumber(realizedMove / risk);
 }
 
 function parseRequiredNumber(value: string): number | null {
@@ -596,6 +632,34 @@ function formatComputedRr(value: number): string {
 
 function roundNumber(value: number): number {
 	return Number(value.toFixed(2));
+}
+
+function syncClosedAtDate(openedAt: string, previousOpenedAt: string, closedAt: string): string {
+	const openedDate = getDateTimeDatePart(openedAt);
+	const openedTime = getDateTimeTimePart(openedAt);
+	if (!openedDate || !openedTime) {
+		return closedAt;
+	}
+
+	const previousOpenedDate = getDateTimeDatePart(previousOpenedAt);
+	const closedDate = getDateTimeDatePart(closedAt);
+	const closedTime = getDateTimeTimePart(closedAt);
+	const hasManualDifferentClosedDate = Boolean(previousOpenedDate && closedDate && closedDate !== previousOpenedDate);
+	if (hasManualDifferentClosedDate) {
+		return closedAt;
+	}
+
+	return `${openedDate}T${closedTime || openedTime}`;
+}
+
+function getDateTimeDatePart(value: string): string {
+	const [date] = value.split('T');
+	return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '';
+}
+
+function getDateTimeTimePart(value: string): string {
+	const timeSeparatorIndex = value.indexOf('T');
+	return timeSeparatorIndex === -1 ? '' : value.slice(timeSeparatorIndex + 1);
 }
 
 function parseTags(value: string): string[] {

@@ -23,6 +23,7 @@ export interface TradeEntry {
 	rr?: number | string;
 	tags?: string[] | string;
 	entry_price?: number | string;
+	stop_loss?: number | string;
 	exit_price?: number | string;
 	take_profit?: number | string;
 	images?: Array<TradeImage | string> | string;

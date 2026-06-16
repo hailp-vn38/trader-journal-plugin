@@ -101,6 +101,7 @@ function renderDetails(parentEl: HTMLElement, trade: TradeEntry): void {
 		{ label: 'Result', value: formatResult(trade.result) },
 		{ label: 'RR', value: formatRr(trade.rr) },
 		{ label: 'Entry price', value: formatPrice(trade.entry_price) },
+		{ label: 'Stop loss', value: formatPrice(trade.stop_loss) },
 		{ label: 'Exit price', value: formatPrice(trade.exit_price) },
 		{ label: 'Take profit', value: formatPrice(trade.take_profit) },
 		{ label: 'Opened at', value: formatDateTime(trade.opened_at) },

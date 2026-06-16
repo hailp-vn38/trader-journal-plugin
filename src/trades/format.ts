@@ -23,6 +23,7 @@ export const KNOWN_TRADE_FIELDS = new Set([
 	'rr',
 	'tags',
 	'entry_price',
+	'stop_loss',
 	'exit_price',
 	'take_profit',
 	'images',
