@@ -2,6 +2,7 @@ import { MarkdownRenderChild, Modal, normalizePath, setIcon, TFile } from 'obsid
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
+import { getTranslator } from '../i18n';
 import {
 	formatDateTime,
 	formatDuration,
@@ -40,26 +41,27 @@ function renderTradeBlock(
 	ctx: MarkdownPostProcessorContext,
 ): void {
 	const { trade, error } = parseTradeJson(source);
+	const tr = getTranslator(plugin.settings.language);
 
 	if (!trade) {
-		renderTradeError(el, error ?? 'Invalid trade block.');
+		renderTradeError(el, error ?? 'Invalid trade block.', tr('error.invalidTradeBlock'));
 		return;
 	}
 
 	const cardEl = el.createDiv({ cls: 'trader-journal-trade-card' });
 	renderHeader(plugin, cardEl, trade, ctx);
-	renderDetails(cardEl, trade);
+	renderDetails(plugin, cardEl, trade);
 	renderTags(cardEl, trade);
 	renderImages(plugin, cardEl, trade, ctx);
-	renderNotes(cardEl, trade);
-	renderExtraFields(cardEl, trade);
+	renderNotes(plugin, cardEl, trade);
+	renderExtraFields(plugin, cardEl, trade);
 }
 
-function renderTradeError(el: HTMLElement, message: string): void {
+function renderTradeError(el: HTMLElement, message: string, title: string): void {
 	const errorEl = el.createDiv({ cls: 'trader-journal-trade-error' });
 	errorEl.createDiv({
 		cls: 'trader-journal-trade-error__title',
-		text: 'Invalid Trader Journal trade block',
+		text: title,
 	});
 	errorEl.createEl('code', { text: message });
 }
@@ -72,10 +74,11 @@ function renderHeader(
 ): void {
 	const headerEl = parentEl.createDiv({ cls: 'trader-journal-trade-card__header' });
 	const titleEl = headerEl.createDiv({ cls: 'trader-journal-trade-card__title' });
+	const tr = getTranslator(plugin.settings.language);
 
-	const symbol = stringifyValue(trade.symbol) || 'Trade';
-	const side = formatSide(trade.side);
-	const result = formatResult(trade.result);
+	const symbol = stringifyValue(trade.symbol) || tr('storage.trade');
+	const side = formatSide(trade.side, plugin.settings.language);
+	const result = formatResult(trade.result, plugin.settings.language);
 	const rr = formatRr(trade.rr);
 
 	titleEl.createDiv({
@@ -115,8 +118,8 @@ function renderEditButton(
 		cls: 'trader-journal-trade-card__edit-button',
 		attr: {
 			type: 'button',
-			'aria-label': 'Edit trade',
-			title: 'Edit trade',
+			'aria-label': getTranslator(plugin.settings.language)('modal.editTrade'),
+			title: getTranslator(plugin.settings.language)('modal.editTrade'),
 		},
 	});
 	const iconEl = buttonEl.createSpan({ attr: { 'aria-hidden': 'true' } });
@@ -137,21 +140,22 @@ function renderEditButton(
 	ctx.addChild(child);
 }
 
-function renderDetails(parentEl: HTMLElement, trade: TradeEntry): void {
+function renderDetails(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: TradeEntry): void {
 	const holdingTime = formatDuration(getHoldingMinutes(trade));
+	const tr = getTranslator(plugin.settings.language);
 	const detailItems: DetailItem[] = [
-		{ label: 'Side', value: formatSide(trade.side) },
-		{ label: 'Setup', value: stringifyValue(trade.setup) },
-		{ label: 'Timeframe', value: stringifyValue(trade.timeframe) },
-		{ label: 'Result', value: formatResult(trade.result) },
-		{ label: 'RR', value: formatRr(trade.rr) },
-		{ label: 'Entry price', value: formatPrice(trade.entry_price) },
-		{ label: 'Stop loss', value: formatPrice(trade.stop_loss) },
-		{ label: 'Exit price', value: formatPrice(trade.exit_price) },
-		{ label: 'Take profit', value: formatPrice(trade.take_profit) },
-		{ label: 'Opened at', value: formatDateTime(trade.opened_at) },
-		{ label: 'Closed at', value: formatDateTime(trade.closed_at) },
-		{ label: 'Holding time', value: holdingTime },
+		{ label: tr('detail.side'), value: formatSide(trade.side, plugin.settings.language) },
+		{ label: tr('detail.setup'), value: stringifyValue(trade.setup) },
+		{ label: tr('detail.timeframe'), value: stringifyValue(trade.timeframe) },
+		{ label: tr('detail.result'), value: formatResult(trade.result, plugin.settings.language) },
+		{ label: tr('detail.rr'), value: formatRr(trade.rr) },
+		{ label: tr('detail.entryPrice'), value: formatPrice(trade.entry_price) },
+		{ label: tr('detail.stopLoss'), value: formatPrice(trade.stop_loss) },
+		{ label: tr('detail.exitPrice'), value: formatPrice(trade.exit_price) },
+		{ label: tr('detail.takeProfit'), value: formatPrice(trade.take_profit) },
+		{ label: tr('detail.openedAt'), value: formatDateTime(trade.opened_at) },
+		{ label: tr('detail.closedAt'), value: formatDateTime(trade.closed_at) },
+		{ label: tr('detail.holdingTime'), value: holdingTime },
 	].filter((item) => item.value);
 
 	if (detailItems.length === 0) {
@@ -190,7 +194,7 @@ function renderImages(
 	const sectionEl = parentEl.createDiv({ cls: 'trader-journal-trade-card__section' });
 	sectionEl.createDiv({
 		cls: 'trader-journal-trade-card__section-title',
-		text: 'Images',
+		text: getTranslator(plugin.settings.language)('detail.images'),
 	});
 
 	const imageGridEl = sectionEl.createDiv({ cls: 'trader-journal-trade-images' });
@@ -209,11 +213,12 @@ function renderImage(
 	const figureEl = parentEl.createEl('figure', { cls: 'trader-journal-trade-image' });
 	const source = resolveImageSource(plugin, image, ctx.sourcePath);
 	const label = image.label ?? image.value;
+	const tr = getTranslator(plugin.settings.language);
 
 	if (image.type === 'url' && !plugin.settings.allowRemoteImages) {
 		figureEl.createDiv({
 			cls: 'trader-journal-trade-image__missing',
-			text: 'Remote image previews are disabled',
+			text: tr('image.remotePreviewDisabled'),
 		});
 		return;
 	}
@@ -224,20 +229,22 @@ function renderImage(
 			attr: {
 				role: 'button',
 				tabindex: '0',
-				'aria-label': `Open ${label || `trade image ${index + 1}`}`,
+				'aria-label': tr('image.open', {
+					label: label || tr('image.tradeImage', { index: index + 1 }),
+				}),
 			},
 		});
 		imageButtonEl.createEl('img', {
 			attr: {
 				src: source,
-				alt: label || `Trade image ${index + 1}`,
+				alt: label || tr('image.tradeImage', { index: index + 1 }),
 				loading: 'lazy',
 			},
 		});
 
 		const child = new MarkdownRenderChild(imageButtonEl);
 		child.registerDomEvent(imageButtonEl, 'click', () => {
-			new TradeImageModal(plugin, source, label || `Trade image ${index + 1}`).open();
+			new TradeImageModal(plugin, source, label || tr('image.tradeImage', { index: index + 1 })).open();
 		});
 		child.registerDomEvent(imageButtonEl, 'keydown', (event) => {
 			if (event.key !== 'Enter' && event.key !== ' ') {
@@ -245,13 +252,13 @@ function renderImage(
 			}
 
 			event.preventDefault();
-			new TradeImageModal(plugin, source, label || `Trade image ${index + 1}`).open();
+			new TradeImageModal(plugin, source, label || tr('image.tradeImage', { index: index + 1 })).open();
 		});
 		ctx.addChild(child);
 	} else {
 		figureEl.createDiv({
 			cls: 'trader-journal-trade-image__missing',
-			text: 'Image file not found',
+			text: tr('image.fileNotFound'),
 		});
 	}
 }
@@ -288,7 +295,7 @@ class TradeImageModal extends Modal {
 	}
 }
 
-function renderNotes(parentEl: HTMLElement, trade: TradeEntry): void {
+function renderNotes(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: TradeEntry): void {
 	const notes = stringifyValue(trade.notes);
 	if (!notes) {
 		return;
@@ -297,7 +304,7 @@ function renderNotes(parentEl: HTMLElement, trade: TradeEntry): void {
 	const sectionEl = parentEl.createDiv({ cls: 'trader-journal-trade-card__section' });
 	sectionEl.createDiv({
 		cls: 'trader-journal-trade-card__section-title',
-		text: 'Notes',
+		text: getTranslator(plugin.settings.language)('detail.notes'),
 	});
 	sectionEl.createDiv({
 		cls: 'trader-journal-trade-card__notes',
@@ -305,7 +312,7 @@ function renderNotes(parentEl: HTMLElement, trade: TradeEntry): void {
 	});
 }
 
-function renderExtraFields(parentEl: HTMLElement, trade: TradeEntry): void {
+function renderExtraFields(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: TradeEntry): void {
 	const detailItems = Object.entries(trade)
 		.filter(([key]) => !KNOWN_TRADE_FIELDS.has(key))
 		.map(([key, value]) => ({
@@ -321,7 +328,7 @@ function renderExtraFields(parentEl: HTMLElement, trade: TradeEntry): void {
 	const sectionEl = parentEl.createDiv({ cls: 'trader-journal-trade-card__section' });
 	sectionEl.createDiv({
 		cls: 'trader-journal-trade-card__section-title',
-		text: 'Additional data',
+		text: getTranslator(plugin.settings.language)('detail.additionalData'),
 	});
 	renderDetailGrid(sectionEl, detailItems);
 }

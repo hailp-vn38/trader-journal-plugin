@@ -1,13 +1,16 @@
 import { Notice } from 'obsidian';
 import type TraderJournalPlugin from '../main';
+import { getTranslator } from '../i18n';
 import { rebuildDailyNoteStats } from '../trades/storage';
 import { openTraderJournalCalendar } from '../ui/TradeCalendarView';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
 
 export function registerCommands(plugin: TraderJournalPlugin) {
+	const tr = getTranslator(plugin.settings.language);
+
 	plugin.addCommand({
 		id: 'open-trader-journal',
-		name: 'Add backtest trade',
+		name: tr('command.addBacktestTrade'),
 		callback: () => {
 			new TraderJournalModal(plugin.app, plugin).open();
 		},
@@ -15,7 +18,7 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 
 	plugin.addCommand({
 		id: 'add-live-trade',
-		name: 'Add live trade',
+		name: tr('command.addLiveTrade'),
 		callback: () => {
 			new TraderJournalModal(plugin.app, plugin, 'live').open();
 		},
@@ -23,7 +26,7 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 
 	plugin.addCommand({
 		id: 'open-trade-calendar',
-		name: 'Open trade calendar',
+		name: tr('command.openTradeCalendar'),
 		callback: () => {
 			void openTraderJournalCalendar(plugin);
 		},
@@ -31,7 +34,7 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 
 	plugin.addCommand({
 		id: 'recalculate-current-journal-stats',
-		name: 'Recalculate current stats',
+		name: tr('command.recalculateCurrentStats'),
 		callback: () => {
 			void recalculateCurrentJournalStats(plugin);
 		},
@@ -39,28 +42,36 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 }
 
 async function recalculateCurrentJournalStats(plugin: TraderJournalPlugin): Promise<void> {
+	const tr = getTranslator(plugin.settings.language);
 	const file = plugin.app.workspace.getActiveFile();
 	if (!file) {
-		new Notice('No active file.');
+		new Notice(tr('error.noActiveFile'));
 		return;
 	}
 
 	try {
 		const result = await rebuildDailyNoteStats(plugin, file);
 		if (result.skipped) {
-			new Notice('Current file is not a trader journal note.');
+			new Notice(tr('error.currentFileNotJournal'));
 			return;
 		}
 
 		const invalidBlockSuffix = result.stats.invalidTradeBlockCount === 1 ? '' : 's';
 		const invalidBlockMessage =
 			result.stats.invalidTradeBlockCount > 0
-				? ` ${result.stats.invalidTradeBlockCount} invalid block${invalidBlockSuffix} skipped.`
+				? tr('notice.invalidBlocksSkipped', {
+						count: result.stats.invalidTradeBlockCount,
+						plural: invalidBlockSuffix,
+					})
 				: '';
 		new Notice(
-			`Recalculated ${result.stats.tradeCount} trade${result.stats.tradeCount === 1 ? '' : 's'}.${invalidBlockMessage}`,
+			tr('notice.recalculatedStats', {
+				count: result.stats.tradeCount,
+				plural: result.stats.tradeCount === 1 ? '' : 's',
+				invalidMessage: invalidBlockMessage,
+			}),
 		);
 	} catch (error) {
-		new Notice(error instanceof Error ? error.message : 'Could not recalculate stats.');
+		new Notice(error instanceof Error ? error.message : tr('error.couldNotRecalculateStats'));
 	}
 }

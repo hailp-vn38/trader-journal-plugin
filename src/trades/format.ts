@@ -1,17 +1,38 @@
 import type { NormalizedTradeImage, TradeEntry, TradeImage } from './types';
+import type { TraderJournalLanguage } from '../settings';
 
-const RESULT_LABELS: Record<string, string> = {
-	loss: 'Loss',
-	thua: 'Loss',
-	win: 'Win',
-	breakeven: 'Breakeven',
-	'hoà vốn': 'Breakeven',
-	'hoa von': 'Breakeven',
+const RESULT_LABELS: Record<TraderJournalLanguage, Record<string, string>> = {
+	en: {
+		loss: 'Loss',
+		thua: 'Loss',
+		win: 'Win',
+		'thắng': 'Win',
+		breakeven: 'Breakeven',
+		'hoà vốn': 'Breakeven',
+		'hòa vốn': 'Breakeven',
+		'hoa von': 'Breakeven',
+	},
+	vi: {
+		loss: 'Thua',
+		thua: 'Thua',
+		win: 'Thắng',
+		'thắng': 'Thắng',
+		breakeven: 'Hòa vốn',
+		'hoà vốn': 'Hòa vốn',
+		'hòa vốn': 'Hòa vốn',
+		'hoa von': 'Hòa vốn',
+	},
 };
 
-const SIDE_LABELS: Record<string, string> = {
-	long: 'Long',
-	short: 'Short',
+const SIDE_LABELS: Record<TraderJournalLanguage, Record<string, string>> = {
+	en: {
+		long: 'Long',
+		short: 'Short',
+	},
+	vi: {
+		long: 'Long',
+		short: 'Short',
+	},
 };
 
 export const KNOWN_TRADE_FIELDS = new Set([
@@ -63,14 +84,14 @@ export function parseTradeJson(source: string): { trade: TradeEntry | null; erro
 	}
 }
 
-export function formatResult(value: unknown): string {
+export function formatResult(value: unknown, language: TraderJournalLanguage = 'en'): string {
 	const raw = stringifyValue(value);
-	return RESULT_LABELS[raw.toLowerCase()] ?? raw;
+	return RESULT_LABELS[language][raw.toLowerCase()] ?? raw;
 }
 
-export function formatSide(value: unknown): string {
+export function formatSide(value: unknown, language: TraderJournalLanguage = 'en'): string {
 	const raw = stringifyValue(value);
-	return SIDE_LABELS[raw.toLowerCase()] ?? raw;
+	return SIDE_LABELS[language][raw.toLowerCase()] ?? raw;
 }
 
 export function formatRr(value: unknown): string {

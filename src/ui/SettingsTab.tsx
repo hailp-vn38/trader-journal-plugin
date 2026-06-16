@@ -5,14 +5,21 @@ import { createRoot } from 'react-dom/client';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
-import { CALENDAR_DISPLAY_MODE_CHANGE_EVENT, normalizeSymbol, normalizeTimeframe } from '../settings';
-import type { CalendarDisplayMode } from '../settings';
+import {
+	CALENDAR_DISPLAY_MODE_CHANGE_EVENT,
+	LANGUAGE_CHANGE_EVENT,
+	normalizeSymbol,
+	normalizeTimeframe,
+} from '../settings';
+import type { CalendarDisplayMode, TraderJournalLanguage } from '../settings';
+import { getTranslator } from '../i18n';
 
 interface SettingsViewProps {
 	plugin: TraderJournalPlugin;
 }
 
 function SettingsView({ plugin }: SettingsViewProps) {
+	const [language, setLanguage] = useState(plugin.settings.language);
 	const [journalFolder, setJournalFolder] = useState(plugin.settings.journalFolder);
 	const [liveJournalFolder, setLiveJournalFolder] = useState(plugin.settings.liveJournalFolder);
 	const [symbols, setSymbols] = useState(plugin.settings.symbols);
@@ -21,6 +28,14 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const [newTimeframe, setNewTimeframe] = useState('');
 	const [allowRemoteImages, setAllowRemoteImages] = useState(plugin.settings.allowRemoteImages);
 	const [calendarDisplayMode, setCalendarDisplayMode] = useState(plugin.settings.calendarDisplayMode);
+	const tr = getTranslator(language);
+
+	const saveLanguage = (value: TraderJournalLanguage) => {
+		setLanguage(value);
+		plugin.settings.language = value;
+		void plugin.saveSettings();
+		window.dispatchEvent(new CustomEvent(LANGUAGE_CHANGE_EVENT, { detail: value }));
+	};
 
 	const saveJournalFolder = (value: string) => {
 		setJournalFolder(value);
@@ -116,11 +131,25 @@ function SettingsView({ plugin }: SettingsViewProps) {
 
 	return (
 		<div className="trader-journal-settings">
-			<h2>Trader Journal settings</h2>
+			<h2>{tr('settings.title')}</h2>
 
 			<label className="trader-journal-setting">
-				<span className="trader-journal-setting__label">Backtest journal folder</span>
-				<span className="trader-journal-setting__description">Root folder for backtest daily notes.</span>
+				<span className="trader-journal-setting__label">{tr('settings.languageLabel')}</span>
+				<span className="trader-journal-setting__description">{tr('settings.languageDescription')}</span>
+				<select
+					value={language}
+					onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+						saveLanguage(event.target.value as TraderJournalLanguage)
+					}
+				>
+					<option value="en">{tr('option.english')}</option>
+					<option value="vi">{tr('option.vietnamese')}</option>
+				</select>
+			</label>
+
+			<label className="trader-journal-setting">
+				<span className="trader-journal-setting__label">{tr('settings.backtestFolderLabel')}</span>
+				<span className="trader-journal-setting__description">{tr('settings.backtestFolderDescription')}</span>
 				<input
 					type="text"
 					value={journalFolder}
@@ -130,8 +159,8 @@ function SettingsView({ plugin }: SettingsViewProps) {
 			</label>
 
 			<label className="trader-journal-setting">
-				<span className="trader-journal-setting__label">Live journal folder</span>
-				<span className="trader-journal-setting__description">Root folder for live trade daily notes.</span>
+				<span className="trader-journal-setting__label">{tr('settings.liveFolderLabel')}</span>
+				<span className="trader-journal-setting__description">{tr('settings.liveFolderDescription')}</span>
 				<input
 					type="text"
 					value={liveJournalFolder}
@@ -142,10 +171,8 @@ function SettingsView({ plugin }: SettingsViewProps) {
 
 			<section className="trader-journal-setting">
 				<div>
-					<div className="trader-journal-setting__label">Remote images</div>
-					<div className="trader-journal-setting__description">
-						Load image previews from external URLs in trade blocks.
-					</div>
+					<div className="trader-journal-setting__label">{tr('settings.remoteImagesLabel')}</div>
+					<div className="trader-journal-setting__description">{tr('settings.remoteImagesDescription')}</div>
 				</div>
 				<label className="trader-journal-toggle">
 					<input
@@ -153,28 +180,28 @@ function SettingsView({ plugin }: SettingsViewProps) {
 						checked={allowRemoteImages}
 						onChange={(event: ChangeEvent<HTMLInputElement>) => saveAllowRemoteImages(event.target.checked)}
 					/>
-					<span>Allow remote image previews</span>
+					<span>{tr('settings.allowRemoteImagePreviews')}</span>
 				</label>
 			</section>
 
 			<label className="trader-journal-setting">
-				<span className="trader-journal-setting__label">Calendar display</span>
-				<span className="trader-journal-setting__description">Layout used in the trade calendar sidebar.</span>
+				<span className="trader-journal-setting__label">{tr('settings.calendarDisplayLabel')}</span>
+				<span className="trader-journal-setting__description">{tr('settings.calendarDisplayDescription')}</span>
 				<select
 					value={calendarDisplayMode}
 					onChange={(event: ChangeEvent<HTMLSelectElement>) =>
 						saveCalendarDisplayMode(event.target.value as CalendarDisplayMode)
 					}
 				>
-					<option value="month">Month calendar</option>
-					<option value="horizontal_calendar">Horizontal calendar</option>
+					<option value="month">{tr('option.monthCalendar')}</option>
+					<option value="horizontal_calendar">{tr('option.horizontalCalendar')}</option>
 				</select>
 			</label>
 
 			<section className="trader-journal-setting trader-journal-setting--list">
 				<div>
-					<div className="trader-journal-setting__label">Symbols</div>
-					<div className="trader-journal-setting__description">Symbols available in the trade modal.</div>
+					<div className="trader-journal-setting__label">{tr('settings.symbolsLabel')}</div>
+					<div className="trader-journal-setting__description">{tr('settings.symbolsDescription')}</div>
 				</div>
 				<div className="trader-journal-setting__control">
 					<div className="trader-journal-add-row">
@@ -186,7 +213,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 							onKeyDown={(event) => handleAddKey(event, addSymbol)}
 						/>
 						<button type="button" onClick={addSymbol}>
-							Add
+							{tr('action.add')}
 						</button>
 					</div>
 					<div className="trader-journal-pill-list">
@@ -195,11 +222,11 @@ function SettingsView({ plugin }: SettingsViewProps) {
 								<span>{symbol}</span>
 								<button
 									type="button"
-									aria-label={`Remove ${symbol}`}
+									aria-label={`${tr('action.remove')} ${symbol}`}
 									disabled={symbols.length <= 1}
 									onClick={() => removeSymbol(symbol)}
 								>
-									Remove
+									{tr('action.remove')}
 								</button>
 							</span>
 						))}
@@ -209,8 +236,8 @@ function SettingsView({ plugin }: SettingsViewProps) {
 
 			<section className="trader-journal-setting trader-journal-setting--list">
 				<div>
-					<div className="trader-journal-setting__label">Timeframes</div>
-					<div className="trader-journal-setting__description">Timeframes available in the trade modal.</div>
+					<div className="trader-journal-setting__label">{tr('settings.timeframesLabel')}</div>
+					<div className="trader-journal-setting__description">{tr('settings.timeframesDescription')}</div>
 				</div>
 				<div className="trader-journal-setting__control">
 					<div className="trader-journal-add-row">
@@ -222,7 +249,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 							onKeyDown={(event) => handleAddKey(event, addTimeframe)}
 						/>
 						<button type="button" onClick={addTimeframe}>
-							Add
+							{tr('action.add')}
 						</button>
 					</div>
 					<div className="trader-journal-pill-list">
@@ -231,11 +258,11 @@ function SettingsView({ plugin }: SettingsViewProps) {
 								<span>{timeframe}</span>
 								<button
 									type="button"
-									aria-label={`Remove ${timeframe}`}
+									aria-label={`${tr('action.remove')} ${timeframe}`}
 									disabled={timeframes.length <= 1}
 									onClick={() => removeTimeframe(timeframe)}
 								>
-									Remove
+									{tr('action.remove')}
 								</button>
 							</span>
 						))}

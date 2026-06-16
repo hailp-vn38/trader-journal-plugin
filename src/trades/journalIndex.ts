@@ -10,6 +10,7 @@ import { extractTrades, hasTradeBlocks, parseFrontmatter, splitFrontmatter } fro
 import { isPotentialJournalFile } from './storage';
 import type { TradeEntry, TradeJournalType } from './types';
 import type { LiveTradeStatus, TradeResult, TradeSide } from './types';
+import type { TraderJournalLanguage } from '../settings';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -163,7 +164,7 @@ export class JournalCalendarIndex {
 
 			const identity = getJournalIdentity(this.plugin, file, parsedFrontmatter, extractedTrades.trades);
 			const trades = extractedTrades.trades.map((trade, index) =>
-				createCalendarTrade(file, content, identity, trade, index),
+				createCalendarTrade(file, content, identity, trade, index, this.plugin.settings.language),
 			);
 
 			return {
@@ -183,6 +184,7 @@ function createCalendarTrade(
 	identity: JournalIdentity,
 	trade: TradeEntry,
 	index: number,
+	language: TraderJournalLanguage,
 ): JournalCalendarTrade {
 	const createdAt = getTradeCreatedAt(trade, file);
 	const sideKey = normalizeTradeSide(trade.side);
@@ -196,11 +198,11 @@ function createCalendarTrade(
 		journalDate: identity.journalDate,
 		journalType,
 		symbol: stringifyValue(trade.symbol) || identity.symbol,
-		side: formatSide(trade.side),
+		side: formatSide(trade.side, language),
 		sideKey,
 		setup: stringifyValue(trade.setup),
 		timeframe: stringifyValue(trade.timeframe),
-		result: formatResult(trade.result),
+		result: formatResult(trade.result, language),
 		resultKey,
 		rr: formatRr(trade.rr),
 		notes: stringifyValue(trade.notes),
@@ -270,7 +272,7 @@ function normalizeTradeSide(value: unknown): TradeSide | null {
 
 function normalizeTradeResult(value: unknown): TradeResult | null {
 	const result = stringifyValue(value).toLowerCase();
-	if (result === 'win') {
+	if (result === 'win' || result === 'thắng') {
 		return 'win';
 	}
 
@@ -278,7 +280,7 @@ function normalizeTradeResult(value: unknown): TradeResult | null {
 		return 'loss';
 	}
 
-	if (result === 'breakeven' || result === 'hoà vốn' || result === 'hoa von') {
+	if (result === 'breakeven' || result === 'hoà vốn' || result === 'hòa vốn' || result === 'hoa von') {
 		return 'breakeven';
 	}
 

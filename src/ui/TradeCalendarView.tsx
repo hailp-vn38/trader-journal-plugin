@@ -6,20 +6,26 @@ import type { KeyboardEvent, MouseEvent } from 'react';
 import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
 import { TraderJournalModal } from './TraderJournalModal';
-import { CALENDAR_DISPLAY_MODE_CHANGE_EVENT } from '../settings';
-import type { CalendarDisplayMode } from '../settings';
+import { CALENDAR_DISPLAY_MODE_CHANGE_EVENT, LANGUAGE_CHANGE_EVENT } from '../settings';
+import type { CalendarDisplayMode, TraderJournalLanguage } from '../settings';
+import {
+	formatTradeCount,
+	getJournalTypeLabel,
+	getLocale,
+	getTranslator,
+	getWeekdayLabels,
+} from '../i18n';
 import {
 	JournalCalendarIndex,
 	type JournalCalendarDay,
 	type JournalCalendarSnapshot,
 	type JournalCalendarTrade,
 } from '../trades/journalIndex';
-import { stringifyValue } from '../trades/format';
+import { formatResult, formatSide, stringifyValue } from '../trades/format';
 import type { TradeJournalType } from '../trades/types';
 
 export const TRADER_JOURNAL_CALENDAR_VIEW_TYPE = 'trader-journal-calendar';
 
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const FILE_UPDATE_DEBOUNCE_MS = 250;
 
 const EMPTY_SNAPSHOT: JournalCalendarSnapshot = {
@@ -55,7 +61,7 @@ export async function openTraderJournalCalendar(plugin: TraderJournalPlugin): Pr
 	}
 
 	if (!leaf) {
-		new Notice('Could not open trade calendar.');
+		new Notice(getTranslator(plugin.settings.language)('calendar.openError'));
 		return;
 	}
 
@@ -83,7 +89,7 @@ export class TraderJournalCalendarView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return 'Trade calendar';
+		return getTranslator(this.plugin.settings.language)('calendar.displayText');
 	}
 
 	getIcon(): string {
@@ -118,6 +124,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const [calendarDisplayMode, setCalendarDisplayMode] = useState<CalendarDisplayMode>(
 		plugin.settings.calendarDisplayMode,
 	);
+	const [language, setLanguage] = useState<TraderJournalLanguage>(plugin.settings.language);
 	const [todayScrollRequest, setTodayScrollRequest] = useState(0);
 	const [selectedDateScrollRequest, setSelectedDateScrollRequest] = useState(0);
 	const [isLoading, setIsLoading] = useState(true);
@@ -125,6 +132,9 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const previousFilterRef = useRef<TradeCalendarFilter>(journalTypeFilter);
 	const horizontalCalendarRef = useRef<HTMLDivElement>(null);
 	const hasCenteredInitialHorizontalTodayRef = useRef(false);
+	const tr = getTranslator(language);
+	const locale = getLocale(language);
+	const weekdayLabels = getWeekdayLabels(language);
 
 	useEffect(() => {
 		const index = new JournalCalendarIndex(plugin);
@@ -221,6 +231,21 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 
 		return () => {
 			window.removeEventListener(CALENDAR_DISPLAY_MODE_CHANGE_EVENT, handleCalendarDisplayModeChange);
+		};
+	}, []);
+
+	useEffect(() => {
+		const handleLanguageChange = (event: Event) => {
+			const nextLanguage = (event as CustomEvent<TraderJournalLanguage>).detail;
+			if (nextLanguage === 'en' || nextLanguage === 'vi') {
+				setLanguage(nextLanguage);
+			}
+		};
+
+		window.addEventListener(LANGUAGE_CHANGE_EVENT, handleLanguageChange);
+
+		return () => {
+			window.removeEventListener(LANGUAGE_CHANGE_EVENT, handleLanguageChange);
 		};
 	}, []);
 
@@ -340,29 +365,29 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 				<button
 					type="button"
 					className="trader-journal-calendar__nav-button"
-					aria-label="Previous month"
+					aria-label={tr('calendar.previousMonth')}
 					onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
 				>
 					‹
 				</button>
-				<div className="trader-journal-calendar__month">{formatMonthLabel(visibleMonth)}</div>
+				<div className="trader-journal-calendar__month">{formatMonthLabel(visibleMonth, locale)}</div>
 				<button
 					type="button"
 					className="trader-journal-calendar__nav-button"
-					aria-label="Next month"
+					aria-label={tr('calendar.nextMonth')}
 					onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
 				>
 					›
 				</button>
 				<button type="button" className="trader-journal-calendar__today-button" onClick={goToToday}>
-					Today
+					{tr('calendar.today')}
 				</button>
 			</header>
 
 			{calendarDisplayMode === 'horizontal_calendar' ? (
 				<div
 					className="trader-journal-horizontal-calendar"
-					aria-label="Horizontal trade calendar"
+					aria-label={tr('calendar.horizontalAria')}
 					ref={horizontalCalendarRef}
 				>
 					{horizontalCalendarDates.map((calendarDate) => (
@@ -372,6 +397,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 							isSelected={calendarDate.date === selectedDate}
 							isToday={calendarDate.date === today}
 							key={calendarDate.date}
+							language={language}
 							onSelect={selectDate}
 						/>
 					))}
@@ -379,7 +405,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 			) : (
 				<>
 					<div className="trader-journal-calendar__weekday-row">
-						{WEEKDAY_LABELS.map((weekday) => (
+						{weekdayLabels.map((weekday) => (
 							<div className="trader-journal-calendar__weekday" key={weekday}>
 								{weekday}
 							</div>
@@ -394,6 +420,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 								isSelected={calendarDate.date === selectedDate}
 								isToday={calendarDate.date === today}
 								key={calendarDate.date}
+								language={language}
 								onSelect={selectDate}
 							/>
 						))}
@@ -404,36 +431,43 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 			<section className="trader-journal-calendar__day-panel">
 				<div className="trader-journal-calendar__day-header">
 					<div className="trader-journal-calendar__day-count">
-						{selectedDay.trades.length} trade{selectedDay.trades.length === 1 ? '' : 's'}
+						{formatTradeCount(language, selectedDay.trades.length)}
 					</div>
 					<div className="trader-journal-calendar__actions">
 						<CalendarIconButton
 							icon="plus"
-							label={`Add ${journalTypeFilter} trade`}
+							label={tr('calendar.addTrade', {
+								type: getJournalTypeLabel(language, journalTypeFilter).toLowerCase(),
+							})}
 							onClick={openCreateTradeModal}
 						/>
 						<select
 							className="trader-journal-calendar__filter"
 							value={journalTypeFilter}
-							aria-label="Filter trade type"
+							aria-label={tr('calendar.filterTradeType')}
 							onChange={(event) => setJournalTypeFilter(event.target.value as TradeCalendarFilter)}
 						>
-							<option value="live">Live</option>
-							<option value="backtest">Backtest</option>
+							<option value="live">{tr('option.live')}</option>
+							<option value="backtest">{tr('option.backtest')}</option>
 						</select>
 					</div>
 				</div>
 
 				{isLoading ? (
-					<div className="trader-journal-calendar__empty">Loading trades...</div>
+					<div className="trader-journal-calendar__empty">{tr('calendar.loadingTrades')}</div>
 				) : selectedDay.trades.length > 0 ? (
 					<div className="trader-journal-calendar__trade-list">
 						{selectedDay.trades.map((trade) => (
-							<TradeCalendarCard plugin={plugin} trade={trade} key={`${trade.filePath}-${trade.id}`} />
+							<TradeCalendarCard
+								language={language}
+								plugin={plugin}
+								trade={trade}
+								key={`${trade.filePath}-${trade.id}`}
+							/>
 						))}
 					</div>
 				) : (
-					<div className="trader-journal-calendar__empty">No trades for this date.</div>
+					<div className="trader-journal-calendar__empty">{tr('calendar.noTrades')}</div>
 				)}
 			</section>
 		</div>
@@ -495,20 +529,23 @@ function CalendarDateButton({
 	day,
 	isSelected,
 	isToday,
+	language,
 	onSelect,
 }: {
 	calendarDate: CalendarDateCell;
 	day: JournalCalendarDay | undefined;
 	isSelected: boolean;
 	isToday: boolean;
+	language: TraderJournalLanguage;
 	onSelect: (date: string) => void;
 }) {
+	const tr = getTranslator(language);
 	const labelParts = [calendarDate.date];
 	if (day?.backtestCount) {
-		labelParts.push(`${day.backtestCount} backtest`);
+		labelParts.push(`${day.backtestCount} ${tr('option.backtest').toLowerCase()}`);
 	}
 	if (day?.liveCount) {
-		labelParts.push(`${day.liveCount} live`);
+		labelParts.push(`${day.liveCount} ${tr('option.live').toLowerCase()}`);
 	}
 
 	return (
@@ -537,24 +574,28 @@ function HorizontalCalendarDateButton({
 	day,
 	isSelected,
 	isToday,
+	language,
 	onSelect,
 }: {
 	calendarDate: CalendarDateCell;
 	day: JournalCalendarDay | undefined;
 	isSelected: boolean;
 	isToday: boolean;
+	language: TraderJournalLanguage;
 	onSelect: (date: string) => void;
 }) {
+	const tr = getTranslator(language);
+	const locale = getLocale(language);
 	const date = parseDateKey(calendarDate.date);
 	const weekdayLabel = date
-		? date.toLocaleDateString(undefined, { weekday: 'short' })
+		? date.toLocaleDateString(locale, { weekday: 'short' })
 		: calendarDate.date.slice(5);
 	const labelParts = [calendarDate.date];
 	if (day?.backtestCount) {
-		labelParts.push(`${day.backtestCount} backtest`);
+		labelParts.push(`${day.backtestCount} ${tr('option.backtest').toLowerCase()}`);
 	}
 	if (day?.liveCount) {
-		labelParts.push(`${day.liveCount} live`);
+		labelParts.push(`${day.liveCount} ${tr('option.live').toLowerCase()}`);
 	}
 
 	return (
@@ -591,14 +632,25 @@ function CalendarDotSummary({ day }: { day: JournalCalendarDay | undefined }) {
 	);
 }
 
-function TradeCalendarCard({ plugin, trade }: { plugin: TraderJournalPlugin; trade: JournalCalendarTrade }) {
+function TradeCalendarCard({
+	language,
+	plugin,
+	trade,
+}: {
+	language: TraderJournalLanguage;
+	plugin: TraderJournalPlugin;
+	trade: JournalCalendarTrade;
+}) {
+	const tr = getTranslator(language);
+	const side = formatSide(trade.trade.side, language);
+	const result = formatResult(trade.trade.result, language);
 	const openTradeFile = async () => {
 		try {
 			await plugin.app.workspace.openLinkText(trade.filePath, '', false);
 			scrollActiveMarkdownViewToTrade(plugin, trade);
 		} catch (error) {
 			console.error('Trader Journal failed to open trade note', error);
-			new Notice('Could not open trade note.');
+			new Notice(tr('calendar.openTradeNoteError'));
 		}
 	};
 
@@ -632,7 +684,7 @@ function TradeCalendarCard({ plugin, trade }: { plugin: TraderJournalPlugin; tra
 					{trade.journalType === 'live' ? (
 						<CalendarIconButton
 							icon="pencil"
-							label="Edit live trade"
+							label={tr('modal.editLiveTrade')}
 							onClick={openEditModal}
 							stopPropagation
 							variant="plain"
@@ -645,7 +697,7 @@ function TradeCalendarCard({ plugin, trade }: { plugin: TraderJournalPlugin; tra
 								`trader-journal-calendar-card__status--${trade.status}`,
 							].join(' ')}
 						>
-							{trade.status === 'open' ? 'Open' : 'Closed'}
+							{trade.status === 'open' ? tr('option.open') : tr('option.closed')}
 						</span>
 					) : null}
 					<span className="trader-journal-calendar-card__time">{formatTradeTime(trade.createdAt)}</span>
@@ -653,7 +705,7 @@ function TradeCalendarCard({ plugin, trade }: { plugin: TraderJournalPlugin; tra
 			</div>
 			<div className="trader-journal-calendar-card__body">
 				<span className="trader-journal-calendar-card__meta">
-					{[trade.side, trade.setup, trade.timeframe].filter(Boolean).join(' · ') || trade.file.basename}
+					{[side, trade.setup, trade.timeframe].filter(Boolean).join(' · ') || trade.file.basename}
 				</span>
 				<span
 					className={[
@@ -661,7 +713,7 @@ function TradeCalendarCard({ plugin, trade }: { plugin: TraderJournalPlugin; tra
 						trade.resultKey ? `trader-journal-calendar-card__result--${trade.resultKey}` : '',
 					].join(' ')}
 				>
-					{[trade.result, trade.rr].filter(Boolean).join(' / ') || '-'}
+					{[result, trade.rr].filter(Boolean).join(' / ') || '-'}
 				</span>
 			</div>
 			{trade.notes ? <div className="trader-journal-calendar-card__notes">{trade.notes}</div> : null}
@@ -800,9 +852,9 @@ function parseDateKey(dateKey: string): Date | null {
 	return new Date(year, month - 1, day);
 }
 
-function formatMonthLabel(monthKey: string): string {
+function formatMonthLabel(monthKey: string, locale: string | undefined): string {
 	const { year, month } = parseMonthKey(monthKey);
-	return new Date(year, month, 1).toLocaleString(undefined, {
+	return new Date(year, month, 1).toLocaleString(locale, {
 		month: 'long',
 		year: 'numeric',
 	});

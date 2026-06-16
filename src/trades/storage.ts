@@ -1,6 +1,9 @@
 import { normalizePath, stringifyYaml, TFile, TFolder } from 'obsidian';
 import type TraderJournalPlugin from '../main';
+import type { TraderJournalLanguage } from '../settings';
+import { getTranslator } from '../i18n';
 import {
+	formatResult,
 	formatRr,
 	formatSide,
 	formatTags,
@@ -68,12 +71,15 @@ export async function saveTradeToDailyNote(
 
 	let file = getFile(plugin, filePath);
 	if (!file) {
-		file = await plugin.app.vault.create(filePath, renderInitialNote(symbol, journalDate, journalType));
+		file = await plugin.app.vault.create(
+			filePath,
+			renderInitialNote(symbol, journalDate, journalType, plugin.settings.language),
+		);
 	}
 
 	await plugin.app.vault.process(file, (content) => {
 		const { frontmatter, body } = splitFrontmatter(content);
-		const bodyWithTrade = appendTradeBlock(ensureTradesSection(body), trade);
+		const bodyWithTrade = appendTradeBlock(ensureTradesSection(body), trade, plugin.settings.language);
 
 		return `${frontmatter}${bodyWithTrade}`;
 	});
@@ -137,7 +143,7 @@ export async function rebuildDailyNoteStats(
 	}
 
 	const initialContent = await plugin.app.vault.read(file);
-	const initialRebuild = buildRebuiltNote(file, initialContent, fallbackIdentity);
+	const initialRebuild = buildRebuiltNote(file, initialContent, fallbackIdentity, plugin.settings.language);
 	if (initialRebuild.skipped) {
 		return {
 			stats: initialRebuild.stats,
@@ -152,7 +158,7 @@ export async function rebuildDailyNoteStats(
 
 	if (initialRebuild.content !== initialContent) {
 		await plugin.app.vault.process(file, (latestContent) => {
-			const latestRebuild = buildRebuiltNote(file, latestContent, fallbackIdentity);
+			const latestRebuild = buildRebuiltNote(file, latestContent, fallbackIdentity, plugin.settings.language);
 			if (latestRebuild.skipped) {
 				return latestContent;
 			}
@@ -232,7 +238,12 @@ export function calculateHoldingTime(openedAt: string, closedAt: string): number
 	return Math.round((closedAtMs - openedAtMs) / 60000);
 }
 
-function renderInitialNote(symbol: string, journalDate: string, journalType: TradeJournalType): string {
+function renderInitialNote(
+	symbol: string,
+	journalDate: string,
+	journalType: TradeJournalType,
+	language: TraderJournalLanguage,
+): string {
 	const stats = getEmptyStats();
 	const frontmatter = stringifyYaml({
 		type: getNoteType(journalType),
@@ -259,24 +270,25 @@ function renderInitialNote(symbol: string, journalDate: string, journalType: Tra
 			: {}),
 	});
 
-	return `---\n${frontmatter}---\n\n${renderDailySummary(symbol, journalDate, journalType, stats)}\n\n## Trades\n`;
+	return `---\n${frontmatter}---\n\n${renderDailySummary(symbol, journalDate, journalType, stats, language)}\n\n## Trades\n`;
 }
 
-function appendTradeBlock(body: string, trade: TradeEntry): string {
-	const heading = renderTradeHeading(trade);
+function appendTradeBlock(body: string, trade: TradeEntry, language: TraderJournalLanguage): string {
+	const heading = renderTradeHeading(trade, language);
 	const json = JSON.stringify(trade, null, '\t');
 
 	return `${body.trimEnd()}\n\n${heading}\n\n\`\`\`${TRADE_CODE_BLOCK_LANGUAGE}\n${json}\n\`\`\`\n`;
 }
 
-function renderTradeHeading(trade: TradeEntry): string {
+function renderTradeHeading(trade: TradeEntry, language: TraderJournalLanguage): string {
+	const tr = getTranslator(language);
 	const openedAtTime = formatHeadingTime(trade.opened_at);
-	const side = formatSide(trade.side);
-	const result = stringifyValue(trade.result).toUpperCase();
+	const side = formatSide(trade.side, language);
+	const result = formatResult(trade.result, language).toUpperCase();
 	const rr = formatRr(trade.rr);
 	const titleParts = [openedAtTime, side, result, rr].filter(Boolean);
 
-	return `### ${titleParts.length ? titleParts.join(' ') : 'Trade'}`;
+	return `### ${titleParts.length ? titleParts.join(' ') : tr('storage.trade')}`;
 }
 
 function renderDailySummary(
@@ -284,19 +296,25 @@ function renderDailySummary(
 	journalDate: string,
 	journalType: TradeJournalType,
 	stats: DailyTradeStats,
+	language: TraderJournalLanguage,
 ): string {
-	const invalidBlockLabel = stats.invalidTradeBlockCount === 1 ? 'block was' : 'blocks were';
+	const tr = getTranslator(language);
+	const invalidBlockLabel =
+		stats.invalidTradeBlockCount === 1 ? tr('storage.invalidBlockWas') : tr('storage.invalidBlocksWere');
 	const invalidBlockWarning =
 		stats.invalidTradeBlockCount === 0
 			? ''
-			: `\n\n> ${stats.invalidTradeBlockCount} invalid trade ${invalidBlockLabel} skipped. Fix invalid JSON before relying on these stats.`;
+			: `\n\n> ${tr('storage.invalidBlockWarning', {
+					count: stats.invalidTradeBlockCount,
+					blockLabel: invalidBlockLabel,
+				})}`;
 
 	return `${SUMMARY_START}
-## Summary
+## ${tr('storage.summary')}
 
-${getJournalTypeLabel(journalType)} / ${symbol} / ${journalDate}
+${getJournalTypeLabel(language, journalType)} / ${symbol} / ${journalDate}
 
-| Trades | Win | Loss | Breakeven | Win rate | Net RR | Avg RR | Best RR | Worst RR |
+| ${tr('storage.trades')} | ${tr('storage.win')} | ${tr('storage.loss')} | ${tr('storage.breakeven')} | ${tr('storage.winRate')} | ${tr('storage.netRr')} | ${tr('storage.avgRr')} | ${tr('storage.bestRr')} | ${tr('storage.worstRr')} |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | ${stats.tradeCount} | ${stats.winCount} | ${stats.lossCount} | ${stats.breakevenCount} | ${formatPercent(stats.winRate)} | ${formatRrValue(stats.netRr)} | ${formatRrValue(stats.averageRr)} | ${formatNullableRr(stats.bestRr)} | ${formatNullableRr(stats.worstRr)} |${invalidBlockWarning}
 ${SUMMARY_END}`;
@@ -306,6 +324,7 @@ function buildRebuiltNote(
 	file: TFile,
 	content: string,
 	fallbackIdentity: Partial<JournalIdentity> | undefined,
+	language: TraderJournalLanguage,
 ): RebuiltNote {
 	const { frontmatter, body } = splitFrontmatter(content);
 	const parsedFrontmatter = parseFrontmatter(frontmatter);
@@ -328,7 +347,7 @@ function buildRebuiltNote(
 	const identity = getJournalIdentity(file, parsedFrontmatter, trades, fallbackIdentity);
 	const stats = calculateDailyTradeStats(trades, extractedTrades.invalidTradeBlockCount);
 	const metadata = createDailyMetadata(identity, stats, parsedFrontmatter);
-	const summary = renderDailySummary(identity.symbol, identity.journalDate, identity.journalType, stats);
+	const summary = renderDailySummary(identity.symbol, identity.journalDate, identity.journalType, stats, language);
 	const bodyWithSummary = upsertSummary(ensureTradesSection(body), summary);
 
 	return {
@@ -440,8 +459,9 @@ function isKnownNoteType(noteType: string): boolean {
 	return noteType === BACKTEST_NOTE_TYPE || noteType === LIVE_NOTE_TYPE;
 }
 
-function getJournalTypeLabel(journalType: TradeJournalType): string {
-	return journalType === 'live' ? 'Live' : 'Backtest';
+function getJournalTypeLabel(language: TraderJournalLanguage, journalType: TradeJournalType): string {
+	const tr = getTranslator(language);
+	return journalType === 'live' ? tr('journal.live') : tr('journal.backtest');
 }
 
 function upsertSummary(body: string, summary: string): string {
@@ -514,7 +534,7 @@ function getSignedRr(trade: TradeEntry): number {
 function getResultKey(trade: TradeEntry): string {
 	const result = stringifyValue(trade.result).toLowerCase();
 
-	if (result === 'win') {
+	if (result === 'win' || result === 'thắng') {
 		return 'win';
 	}
 
@@ -522,7 +542,7 @@ function getResultKey(trade: TradeEntry): string {
 		return 'loss';
 	}
 
-	if (result === 'breakeven' || result === 'hoà vốn' || result === 'hoa von') {
+	if (result === 'breakeven' || result === 'hoà vốn' || result === 'hòa vốn' || result === 'hoa von') {
 		return 'breakeven';
 	}
 

@@ -5,14 +5,16 @@ import { TraderJournalSettingTab } from './ui/SettingsTab';
 import { openTraderJournalCalendar, registerTraderJournalCalendarView } from './ui/TradeCalendarView';
 import { registerAutoStatsRebuild } from './trades/autoRebuild';
 import { registerTradeBlockProcessor } from './trades/tradeBlockProcessor';
+import { getTranslator } from './i18n';
 
 export default class TraderJournalPlugin extends Plugin {
 	settings!: TraderJournalSettings;
 
 	async onload() {
 		await this.loadSettings();
+		const tr = getTranslator(this.settings.language);
 
-		this.addRibbonIcon('calendar-days', 'Open trade calendar', () => {
+		this.addRibbonIcon('calendar-days', tr('command.openTradeCalendar'), () => {
 			void openTraderJournalCalendar(this);
 		});
 

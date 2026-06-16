@@ -1,5 +1,7 @@
 export type CalendarDisplayMode = 'month' | 'horizontal_calendar';
+export type TraderJournalLanguage = 'en' | 'vi';
 export const CALENDAR_DISPLAY_MODE_CHANGE_EVENT = 'trader-journal-calendar-display-mode-change';
+export const LANGUAGE_CHANGE_EVENT = 'trader-journal-language-change';
 
 export interface TraderJournalSettings {
 	journalFolder: string;
@@ -8,6 +10,7 @@ export interface TraderJournalSettings {
 	timeframes: string[];
 	allowRemoteImages: boolean;
 	calendarDisplayMode: CalendarDisplayMode;
+	language: TraderJournalLanguage;
 }
 
 export const DEFAULT_SETTINGS: TraderJournalSettings = {
@@ -17,6 +20,7 @@ export const DEFAULT_SETTINGS: TraderJournalSettings = {
 	timeframes: ['1m', '3m', '5m', '15m', '1h'],
 	allowRemoteImages: false,
 	calendarDisplayMode: 'month',
+	language: 'en',
 };
 
 export function normalizeSettings(settings: Partial<TraderJournalSettings> | null | undefined): TraderJournalSettings {
@@ -27,6 +31,7 @@ export function normalizeSettings(settings: Partial<TraderJournalSettings> | nul
 		timeframes: normalizeStringList(settings?.timeframes, DEFAULT_SETTINGS.timeframes, normalizeTimeframe),
 		allowRemoteImages: settings?.allowRemoteImages === true,
 		calendarDisplayMode: normalizeCalendarDisplayMode(settings?.calendarDisplayMode),
+		language: normalizeLanguage(settings?.language),
 	};
 }
 
@@ -40,6 +45,10 @@ export function normalizeTimeframe(value: string): string {
 
 function normalizeCalendarDisplayMode(value: unknown): CalendarDisplayMode {
 	return value === 'horizontal_calendar' ? 'horizontal_calendar' : DEFAULT_SETTINGS.calendarDisplayMode;
+}
+
+function normalizeLanguage(value: unknown): TraderJournalLanguage {
+	return value === 'vi' ? 'vi' : DEFAULT_SETTINGS.language;
 }
 
 function normalizeStringList(
