@@ -1,4 +1,4 @@
-import { normalizePath, TFile } from 'obsidian';
+import { normalizePath, TFile, TFolder } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import {
 	formatResult,
@@ -72,9 +72,7 @@ export class JournalCalendarIndex {
 	async rebuild(): Promise<JournalCalendarSnapshot> {
 		this.entriesByPath.clear();
 
-		const files = this.plugin.app.vault
-			.getMarkdownFiles()
-			.filter((file) => isPotentialJournalFile(this.plugin, file));
+		const files = getJournalFiles(this.plugin);
 		const entries = await Promise.all(files.map((file) => this.readFileEntry(file)));
 
 		for (const entry of entries) {
@@ -176,6 +174,49 @@ export class JournalCalendarIndex {
 			return null;
 		}
 	}
+}
+
+function getJournalFiles(plugin: TraderJournalPlugin): TFile[] {
+	const files: TFile[] = [];
+
+	for (const folder of getJournalRootFolders(plugin)) {
+		collectJournalFiles(plugin, folder, files);
+	}
+
+	return files;
+}
+
+function getJournalRootFolders(plugin: TraderJournalPlugin): TFolder[] {
+	const folderPaths = [plugin.settings.journalFolder, plugin.settings.liveJournalFolder]
+		.map(normalizeJournalRootPath)
+		.filter(Boolean);
+	const uniqueFolderPaths = [...new Set(folderPaths)];
+
+	return uniqueFolderPaths
+		.map((folderPath) => plugin.app.vault.getAbstractFileByPath(folderPath))
+		.filter((file): file is TFolder => file instanceof TFolder);
+}
+
+function collectJournalFiles(plugin: TraderJournalPlugin, folder: TFolder, files: TFile[]): void {
+	for (const child of folder.children) {
+		if (child instanceof TFolder) {
+			collectJournalFiles(plugin, child, files);
+			continue;
+		}
+
+		if (child instanceof TFile && isPotentialJournalFile(plugin, child)) {
+			files.push(child);
+		}
+	}
+}
+
+function normalizeJournalRootPath(folderPath: string): string {
+	const normalizedPath = normalizePath(folderPath).replace(/\/$/, '');
+	return isVaultRootPath(normalizedPath) ? '' : normalizedPath;
+}
+
+function isVaultRootPath(path: string): boolean {
+	return path === '' || path === '/' || path === '.';
 }
 
 function createCalendarTrade(

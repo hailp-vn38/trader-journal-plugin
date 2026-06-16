@@ -110,7 +110,7 @@ function renderEditButton(
 	trade: TradeEntry,
 	ctx: MarkdownPostProcessorContext,
 ): void {
-	if (!stringifyValue(trade.id)) {
+	if (!stringifyValue(trade.id) || !canEditTrade(plugin, trade, ctx.sourcePath)) {
 		return;
 	}
 
@@ -138,6 +138,18 @@ function renderEditButton(
 		).open();
 	});
 	ctx.addChild(child);
+}
+
+function canEditTrade(plugin: TraderJournalPlugin, trade: TradeEntry, sourcePath: string): boolean {
+	return getTradeJournalType(plugin, trade, sourcePath) !== 'live' || getLiveTradeStatus(trade) !== 'closed';
+}
+
+function getLiveTradeStatus(trade: TradeEntry): 'open' | 'closed' {
+	if (trade.status === 'open' || trade.status === 'closed') {
+		return trade.status;
+	}
+
+	return stringifyValue(trade.closed_at) ? 'closed' : 'open';
 }
 
 function renderDetails(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: TradeEntry): void {

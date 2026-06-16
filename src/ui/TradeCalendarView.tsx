@@ -117,7 +117,7 @@ export class TraderJournalCalendarView extends ItemView {
 }
 
 function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
-	const today = useMemo(() => formatDateKey(new Date()), []);
+	const [today, setToday] = useState(() => formatDateKey(new Date()));
 	const [snapshot, setSnapshot] = useState<JournalCalendarSnapshot>(EMPTY_SNAPSHOT);
 	const [selectedDate, setSelectedDate] = useState(today);
 	const [visibleMonth, setVisibleMonth] = useState(getMonthKey(today));
@@ -220,6 +220,25 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 			}
 		};
 	}, [plugin]);
+
+	useEffect(() => {
+		let timer: number | null = null;
+
+		const scheduleTodayRefresh = () => {
+			timer = window.setTimeout(() => {
+				setToday(formatDateKey(new Date()));
+				scheduleTodayRefresh();
+			}, getNextLocalMidnightDelay());
+		};
+
+		scheduleTodayRefresh();
+
+		return () => {
+			if (timer !== null) {
+				window.clearTimeout(timer);
+			}
+		};
+	}, []);
 
 	useEffect(() => {
 		const handleCalendarDisplayModeChange = (event: Event) => {
@@ -379,9 +398,11 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	};
 
 	const goToToday = () => {
+		const nextToday = formatDateKey(new Date());
 		setMonthStartScrollTarget(null);
-		setSelectedDate(today);
-		setVisibleMonth(getMonthKey(today));
+		setToday(nextToday);
+		setSelectedDate(nextToday);
+		setVisibleMonth(getMonthKey(nextToday));
 		setTodayScrollRequest((currentRequest) => currentRequest + 1);
 	};
 
@@ -691,6 +712,10 @@ function TradeCalendarCard({
 	};
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		if (event.target !== event.currentTarget) {
+			return;
+		}
+
 		if (event.key !== 'Enter' && event.key !== ' ') {
 			return;
 		}
@@ -717,7 +742,7 @@ function TradeCalendarCard({
 			<div className="trader-journal-calendar-card__head">
 				<strong className="trader-journal-calendar-card__symbol">{trade.symbol}</strong>
 				<div className="trader-journal-calendar-card__head-meta">
-					{trade.journalType === 'live' ? (
+					{trade.journalType === 'live' && trade.status !== 'closed' ? (
 						<CalendarIconButton
 							icon="pencil"
 							label={tr('modal.editLiveTrade')}
@@ -869,6 +894,12 @@ function parseMonthKey(monthKey: string): { year: number; month: number } {
 		year: Number.isFinite(year) ? year : new Date().getFullYear(),
 		month: Number.isFinite(month) ? month - 1 : new Date().getMonth(),
 	};
+}
+
+function getNextLocalMidnightDelay(): number {
+	const now = new Date();
+	const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+	return Math.max(nextMidnight.getTime() - now.getTime() + 1000, 1000);
 }
 
 function formatDateKey(date: Date): string {
