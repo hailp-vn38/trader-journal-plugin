@@ -6,6 +6,7 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 
 - Add backtest trades from an Obsidian modal.
 - Add live trades from a separate modal flow.
+- Open a sidebar calendar with separate backtest and live dots per journal date.
 - Store one file per symbol per day.
 - Configure journal folder, symbols, and timeframes in settings.
 - Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
@@ -58,6 +59,7 @@ Trades are stored as fenced JSON code blocks:
 {
 	"schemaVersion": 1,
 	"id": "20260412234400-BTC-a1b2c3",
+	"date": "2026-06-15T10:06:00+07:00",
 	"symbol": "BTC",
 	"side": "long",
 	"setup": "Breakout",
@@ -79,7 +81,7 @@ Trades are stored as fenced JSON code blocks:
 ```
 ````
 
-The JSON block is the source of truth. The summary table and frontmatter statistics are regenerated from the trade blocks. Invalid trade JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` so they are not silently hidden from the daily stats.
+The JSON block is the source of truth. The `date` field stores when the trade entry was created and is used to sort items inside a calendar day. The summary table and frontmatter statistics are regenerated from the trade blocks. Invalid trade JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` so they are not silently hidden from the daily stats.
 
 Live trade RR is calculated automatically from actual risk. For long trades it uses `(exit_price - entry_price) / (entry_price - stop_loss)`. For short trades it uses `(entry_price - exit_price) / (stop_loss - entry_price)`.
 
@@ -87,6 +89,7 @@ Live trade RR is calculated automatically from actual risk. For long trades it u
 
 - **Add backtest trade**: Opens the trade entry modal.
 - **Add live trade**: Opens the live trade entry modal.
+- **Open trade calendar**: Opens the sidebar calendar view.
 - **Recalculate current stats**: Rebuilds the summary and frontmatter statistics for the active journal note.
 
 ## Settings

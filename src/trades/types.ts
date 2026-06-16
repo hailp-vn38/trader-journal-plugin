@@ -14,6 +14,7 @@ export interface TradeImage {
 export interface TradeEntry {
 	schemaVersion?: number;
 	id?: string;
+	date?: string;
 	journal_type?: TradeJournalType;
 	symbol?: string;
 	side?: TradeSide;

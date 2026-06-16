@@ -1,12 +1,12 @@
-import { normalizePath, parseYaml, stringifyYaml, TFile, TFolder } from 'obsidian';
+import { normalizePath, stringifyYaml, TFile, TFolder } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import {
 	formatRr,
 	formatSide,
 	formatTags,
-	parseTradeJson,
 	stringifyValue,
 } from './format';
+import { extractTrades, hasTradeBlocks, parseFrontmatter, splitFrontmatter } from './parser';
 import { TRADE_CODE_BLOCK_LANGUAGE } from './types';
 import type { TradeEntry, TradeJournalType } from './types';
 
@@ -16,12 +16,6 @@ const DEFAULT_JOURNAL_TYPE: TradeJournalType = 'backtest';
 const SCHEMA_VERSION = 1;
 const SUMMARY_START = '<!-- trader-journal:summary:start -->';
 const SUMMARY_END = '<!-- trader-journal:summary:end -->';
-const TRADE_BLOCK_PATTERN = /```trader-journal-trade\s*\n([\s\S]*?)\n```/g;
-
-interface MarkdownParts {
-	frontmatter: string;
-	body: string;
-}
 
 export interface DailyTradeStats {
 	tradeCount: number;
@@ -54,11 +48,6 @@ interface RebuiltNote {
 	metadata: Record<string, unknown>;
 	stats: DailyTradeStats;
 	skipped: boolean;
-}
-
-interface ExtractedTrades {
-	trades: TradeEntry[];
-	invalidTradeBlockCount: number;
 }
 
 export async function saveTradeToDailyNote(
@@ -280,7 +269,7 @@ function buildRebuiltNote(
 	const { trades } = extractedTrades;
 	const isJournalNote =
 		isKnownNoteType(stringifyValue(parsedFrontmatter.type)) ||
-		body.includes(`\`\`\`${TRADE_CODE_BLOCK_LANGUAGE}`) ||
+		hasTradeBlocks(body) ||
 		Boolean(fallbackIdentity?.symbol || fallbackIdentity?.journalDate || fallbackIdentity?.journalType);
 
 	if (!isJournalNote) {
@@ -422,58 +411,6 @@ function ensureTradesSection(body: string): string {
 	}
 
 	return `${body.trimEnd()}\n\n## Trades\n`;
-}
-
-function splitFrontmatter(content: string): MarkdownParts {
-	const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
-
-	if (!match?.[0]) {
-		return {
-			frontmatter: '',
-			body: content,
-		};
-	}
-
-	return {
-		frontmatter: match[0],
-		body: content.slice(match[0].length),
-	};
-}
-
-function parseFrontmatter(frontmatter: string): Record<string, unknown> {
-	const match = frontmatter.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-	const yaml = match?.[1];
-	if (!yaml) {
-		return {};
-	}
-
-	const parsed: unknown = parseYaml(yaml);
-	return isRecord(parsed) ? parsed : {};
-}
-
-function extractTrades(body: string): ExtractedTrades {
-	const trades: TradeEntry[] = [];
-	let invalidTradeBlockCount = 0;
-
-	for (const match of body.matchAll(TRADE_BLOCK_PATTERN)) {
-		const source = match[1];
-		if (!source?.trim()) {
-			invalidTradeBlockCount += 1;
-			continue;
-		}
-
-		const { trade } = parseTradeJson(source);
-		if (trade) {
-			trades.push(trade);
-		} else {
-			invalidTradeBlockCount += 1;
-		}
-	}
-
-	return {
-		trades,
-		invalidTradeBlockCount,
-	};
 }
 
 function calculateDailyTradeStats(trades: TradeEntry[], invalidTradeBlockCount: number): DailyTradeStats {
@@ -676,10 +613,6 @@ function hasMetadataChanges(
 
 function areMetadataValuesEqual(currentValue: unknown, nextValue: unknown): boolean {
 	return JSON.stringify(currentValue ?? null) === JSON.stringify(nextValue ?? null);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function escapeRegExp(value: string): string {

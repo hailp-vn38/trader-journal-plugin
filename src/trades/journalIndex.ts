@@ -1,0 +1,296 @@
+import { normalizePath, TFile } from 'obsidian';
+import type TraderJournalPlugin from '../main';
+import {
+	formatResult,
+	formatRr,
+	formatSide,
+	stringifyValue,
+} from './format';
+import { extractTrades, hasTradeBlocks, parseFrontmatter, splitFrontmatter } from './parser';
+import { isPotentialJournalFile } from './storage';
+import type { TradeEntry, TradeJournalType } from './types';
+
+const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
+const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
+
+export interface JournalCalendarTrade {
+	id: string;
+	file: TFile;
+	filePath: string;
+	journalDate: string;
+	journalType: TradeJournalType;
+	symbol: string;
+	side: string;
+	setup: string;
+	timeframe: string;
+	result: string;
+	rr: string;
+	notes: string;
+	createdAt: string;
+	sortTime: number;
+	trade: TradeEntry;
+}
+
+export interface JournalCalendarDay {
+	date: string;
+	backtestCount: number;
+	liveCount: number;
+	trades: JournalCalendarTrade[];
+}
+
+export interface JournalCalendarSnapshot {
+	daysByDate: Record<string, JournalCalendarDay>;
+	dayDates: string[];
+	tradeCount: number;
+}
+
+interface JournalCalendarFileEntry {
+	path: string;
+	trades: JournalCalendarTrade[];
+}
+
+interface JournalIdentity {
+	journalDate: string;
+	journalType: TradeJournalType;
+	symbol: string;
+}
+
+export class JournalCalendarIndex {
+	private readonly plugin: TraderJournalPlugin;
+	private readonly entriesByPath = new Map<string, JournalCalendarFileEntry>();
+
+	constructor(plugin: TraderJournalPlugin) {
+		this.plugin = plugin;
+	}
+
+	async rebuild(): Promise<JournalCalendarSnapshot> {
+		this.entriesByPath.clear();
+
+		const files = this.plugin.app.vault
+			.getMarkdownFiles()
+			.filter((file) => isPotentialJournalFile(this.plugin, file));
+		const entries = await Promise.all(files.map((file) => this.readFileEntry(file)));
+
+		for (const entry of entries) {
+			if (entry) {
+				this.entriesByPath.set(entry.path, entry);
+			}
+		}
+
+		return this.getSnapshot();
+	}
+
+	async updateFile(file: TFile): Promise<JournalCalendarSnapshot> {
+		this.entriesByPath.delete(file.path);
+
+		if (isPotentialJournalFile(this.plugin, file)) {
+			const entry = await this.readFileEntry(file);
+			if (entry) {
+				this.entriesByPath.set(entry.path, entry);
+			}
+		}
+
+		return this.getSnapshot();
+	}
+
+	removePath(path: string): JournalCalendarSnapshot {
+		this.entriesByPath.delete(path);
+		return this.getSnapshot();
+	}
+
+	getSnapshot(): JournalCalendarSnapshot {
+		const daysByDate: Record<string, JournalCalendarDay> = {};
+
+		for (const entry of this.entriesByPath.values()) {
+			for (const trade of entry.trades) {
+				const day =
+					daysByDate[trade.journalDate] ??
+					(daysByDate[trade.journalDate] = {
+						date: trade.journalDate,
+						backtestCount: 0,
+						liveCount: 0,
+						trades: [],
+					});
+
+				if (trade.journalType === 'live') {
+					day.liveCount += 1;
+				} else {
+					day.backtestCount += 1;
+				}
+
+				day.trades.push(trade);
+			}
+		}
+
+		for (const day of Object.values(daysByDate)) {
+			day.trades.sort((firstTrade, secondTrade) => {
+				if (firstTrade.sortTime !== secondTrade.sortTime) {
+					return firstTrade.sortTime - secondTrade.sortTime;
+				}
+
+				return firstTrade.filePath.localeCompare(secondTrade.filePath);
+			});
+		}
+
+		const dayDates = Object.keys(daysByDate).sort();
+		const tradeCount = Object.values(daysByDate).reduce((total, day) => total + day.trades.length, 0);
+
+		return {
+			daysByDate,
+			dayDates,
+			tradeCount,
+		};
+	}
+
+	private async readFileEntry(file: TFile): Promise<JournalCalendarFileEntry | null> {
+		try {
+			const content = await this.plugin.app.vault.read(file);
+			if (!hasTradeBlocks(content)) {
+				return null;
+			}
+
+			const { frontmatter, body } = splitFrontmatter(content);
+			const parsedFrontmatter = parseFrontmatter(frontmatter);
+			const extractedTrades = extractTrades(body);
+			if (extractedTrades.trades.length === 0) {
+				return null;
+			}
+
+			const identity = getJournalIdentity(this.plugin, file, parsedFrontmatter, extractedTrades.trades);
+			const trades = extractedTrades.trades.map((trade, index) =>
+				createCalendarTrade(file, identity, trade, index),
+			);
+
+			return {
+				path: file.path,
+				trades,
+			};
+		} catch (error) {
+			console.error(`Trader Journal failed to index ${file.path}`, error);
+			return null;
+		}
+	}
+}
+
+function createCalendarTrade(
+	file: TFile,
+	identity: JournalIdentity,
+	trade: TradeEntry,
+	index: number,
+): JournalCalendarTrade {
+	const createdAt = getTradeCreatedAt(trade, file);
+
+	return {
+		id: stringifyValue(trade.id) || `${file.path}-${index}`,
+		file,
+		filePath: file.path,
+		journalDate: identity.journalDate,
+		journalType: normalizeJournalType(trade.journal_type) ?? identity.journalType,
+		symbol: stringifyValue(trade.symbol) || identity.symbol,
+		side: formatSide(trade.side),
+		setup: stringifyValue(trade.setup),
+		timeframe: stringifyValue(trade.timeframe),
+		result: formatResult(trade.result),
+		rr: formatRr(trade.rr),
+		notes: stringifyValue(trade.notes),
+		createdAt,
+		sortTime: parseDateMs(createdAt) ?? file.stat.ctime + index,
+		trade,
+	};
+}
+
+function getJournalIdentity(
+	plugin: TraderJournalPlugin,
+	file: TFile,
+	frontmatter: Record<string, unknown>,
+	trades: TradeEntry[],
+): JournalIdentity {
+	const firstTrade = trades[0];
+	const journalType = getJournalType(plugin, file, frontmatter, firstTrade);
+	const symbol =
+		stringifyValue(frontmatter.symbol) ||
+		stringifyValue(firstTrade?.symbol) ||
+		inferSymbolFromPath(file.path);
+	const journalDate =
+		stringifyValue(frontmatter.journalDate) ||
+		stringifyValue(firstTrade?.journalDate) ||
+		stringifyValue(firstTrade?.tradeDate) ||
+		inferJournalDateFromFile(file) ||
+		formatDateKey(new Date(file.stat.ctime));
+
+	return {
+		journalDate,
+		journalType,
+		symbol: symbol || 'UNKNOWN',
+	};
+}
+
+function getJournalType(
+	plugin: TraderJournalPlugin,
+	file: TFile,
+	frontmatter: Record<string, unknown>,
+	firstTrade: TradeEntry | undefined,
+): TradeJournalType {
+	const noteType = stringifyValue(frontmatter.type);
+	if (noteType === LIVE_NOTE_TYPE) {
+		return 'live';
+	}
+
+	if (noteType === BACKTEST_NOTE_TYPE) {
+		return 'backtest';
+	}
+
+	return (
+		normalizeJournalType(frontmatter.journalType) ??
+		normalizeJournalType(firstTrade?.journal_type) ??
+		inferJournalTypeFromPath(plugin, file.path)
+	);
+}
+
+function normalizeJournalType(value: unknown): TradeJournalType | null {
+	return value === 'live' || value === 'backtest' ? value : null;
+}
+
+function inferJournalTypeFromPath(plugin: TraderJournalPlugin, path: string): TradeJournalType {
+	const liveJournalFolder = normalizePath(plugin.settings.liveJournalFolder).replace(/\/$/, '');
+	return liveJournalFolder && path.startsWith(`${liveJournalFolder}/`) ? 'live' : 'backtest';
+}
+
+function getTradeCreatedAt(trade: TradeEntry, file: TFile): string {
+	const date =
+		stringifyValue(trade.date) ||
+		stringifyValue(trade.opened_at) ||
+		stringifyValue(trade.closed_at);
+	if (date) {
+		return date;
+	}
+
+	return new Date(file.stat.ctime).toISOString();
+}
+
+function parseDateMs(value: string): number | null {
+	const parsed = new Date(value).getTime();
+	return Number.isNaN(parsed) ? null : parsed;
+}
+
+function inferSymbolFromPath(path: string): string {
+	const parts = path.split('/');
+	const fileNameIndex = parts.length - 1;
+	const monthIndex = fileNameIndex - 1;
+	const yearIndex = monthIndex - 1;
+	const symbolIndex = yearIndex - 1;
+
+	return parts[symbolIndex] ?? '';
+}
+
+function inferJournalDateFromFile(file: TFile): string {
+	return /^\d{4}-\d{2}-\d{2}$/.test(file.basename) ? file.basename : '';
+}
+
+function formatDateKey(date: Date): string {
+	return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+function padDatePart(value: number): string {
+	return String(value).padStart(2, '0');
+}

@@ -216,6 +216,7 @@ function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJo
 		const trade: TradeEntry = {
 			schemaVersion: 1,
 			id: createTradeId(symbol, openedAt, journalDate),
+			date: getCurrentLocalIsoString(),
 			journal_type: journalType,
 			symbol,
 			side: form.side,
@@ -921,6 +922,14 @@ function toLocalIsoString(value: string): string {
 		return '';
 	}
 
+	return formatLocalIsoString(date);
+}
+
+function getCurrentLocalIsoString(): string {
+	return formatLocalIsoString(new Date());
+}
+
+function formatLocalIsoString(date: Date): string {
 	const offsetMinutes = -date.getTimezoneOffset();
 	const sign = offsetMinutes >= 0 ? '+' : '-';
 	const absoluteOffsetMinutes = Math.abs(offsetMinutes);

@@ -1,6 +1,7 @@
 import { Notice } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { rebuildDailyNoteStats } from '../trades/storage';
+import { openTraderJournalCalendar } from '../ui/TradeCalendarView';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
 
 export function registerCommands(plugin: TraderJournalPlugin) {
@@ -17,6 +18,14 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 		name: 'Add live trade',
 		callback: () => {
 			new TraderJournalModal(plugin.app, plugin, 'live').open();
+		},
+	});
+
+	plugin.addCommand({
+		id: 'open-trade-calendar',
+		name: 'Open trade calendar',
+		callback: () => {
+			void openTraderJournalCalendar(plugin);
 		},
 	});
 

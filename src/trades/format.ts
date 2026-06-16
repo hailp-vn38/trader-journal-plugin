@@ -14,6 +14,7 @@ const SIDE_LABELS: Record<string, string> = {
 export const KNOWN_TRADE_FIELDS = new Set([
 	'schemaVersion',
 	'id',
+	'date',
 	'journal_type',
 	'symbol',
 	'side',
