@@ -15,6 +15,9 @@ export default class TraderJournalPlugin extends Plugin {
 		this.addRibbonIcon('notebook-pen', 'Add backtest trade', () => {
 			new TraderJournalModal(this.app, this).open();
 		});
+		this.addRibbonIcon('line-chart', 'Add live trade', () => {
+			new TraderJournalModal(this.app, this, 'live').open();
+		});
 
 		const statusBarItemEl = this.addStatusBarItem();
 		statusBarItemEl.setText('Trader journal');

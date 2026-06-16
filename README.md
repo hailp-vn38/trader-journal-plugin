@@ -1,13 +1,15 @@
 # Trader Journal
 
-Trader Journal is an Obsidian plugin for recording backtest trades in Markdown notes. It stores one daily journal file per symbol and renders each trade JSON block as a readable card in Reading View.
+Trader Journal is an Obsidian plugin for recording backtest and live trades in Markdown notes. It stores one daily journal file per symbol and renders each trade JSON block as a readable card in Reading View.
 
 ## Features
 
 - Add backtest trades from an Obsidian modal.
+- Add live trades from a separate modal flow.
 - Store one file per symbol per day.
 - Configure journal folder, symbols, and timeframes in settings.
 - Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
+- Track live entry price, exit price, take profit, and auto-calculated RR.
 - Auto-calculate holding time from opened and closed timestamps.
 - Paste image files directly into the Images input; unsaved pasted images are moved to trash if the modal closes without saving.
 - Render trade JSON blocks as cards in Reading View.
@@ -17,10 +19,16 @@ Trader Journal is an Obsidian plugin for recording backtest trades in Markdown n
 
 ## Storage Layout
 
-Journal files are created under the configured journal folder. The daily file date is the day you record the backtest journal entry, not necessarily the trade execution date inside the backtest data.
+Journal files are created under the configured backtest or live journal folder. The daily file date is the day you record the journal entry, not necessarily the trade execution date inside the trade data.
 
 ```text
 Trading/Backtests/
+  BTC/
+    2026/
+      06/
+        2026-06-15.md
+  _attachments/
+Trading/Live/
   BTC/
     2026/
       06/
@@ -38,6 +46,7 @@ Example:
 
 ```text
 Trading/Backtests/BTC/2026/06/2026-06-15.md
+Trading/Live/BTC/2026/06/2026-06-15.md
 ```
 
 ## Trade Blocks
@@ -72,14 +81,18 @@ Trades are stored as fenced JSON code blocks:
 
 The JSON block is the source of truth. The summary table and frontmatter statistics are regenerated from the trade blocks. Invalid trade JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` so they are not silently hidden from the daily stats.
 
+Live trade RR is calculated automatically. The plugin treats the distance from `entry_price` to `take_profit` as 1R. For long trades it uses `(exit_price - entry_price) / abs(take_profit - entry_price)`. For short trades it uses `(entry_price - exit_price) / abs(entry_price - take_profit)`.
+
 ## Commands
 
 - **Add backtest trade**: Opens the trade entry modal.
+- **Add live trade**: Opens the live trade entry modal.
 - **Recalculate current stats**: Rebuilds the summary and frontmatter statistics for the active journal note.
 
 ## Settings
 
-- **Journal folder**: Root folder for generated journal files.
+- **Backtest journal folder**: Root folder for generated backtest journal files.
+- **Live journal folder**: Root folder for generated live journal files.
 - **Symbols**: Symbols shown in the trade modal.
 - **Timeframes**: Timeframes shown in the trade modal.
 - **Remote images**: Allows image previews from external URLs. This is disabled by default.

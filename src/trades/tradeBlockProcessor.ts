@@ -4,6 +4,7 @@ import type TraderJournalPlugin from '../main';
 import {
 	formatDateTime,
 	formatDuration,
+	formatPrice,
 	formatResult,
 	formatRr,
 	formatSide,
@@ -99,6 +100,9 @@ function renderDetails(parentEl: HTMLElement, trade: TradeEntry): void {
 		{ label: 'Timeframe', value: stringifyValue(trade.timeframe) },
 		{ label: 'Result', value: formatResult(trade.result) },
 		{ label: 'RR', value: formatRr(trade.rr) },
+		{ label: 'Entry price', value: formatPrice(trade.entry_price) },
+		{ label: 'Exit price', value: formatPrice(trade.exit_price) },
+		{ label: 'Take profit', value: formatPrice(trade.take_profit) },
 		{ label: 'Opened at', value: formatDateTime(trade.opened_at) },
 		{ label: 'Closed at', value: formatDateTime(trade.closed_at) },
 		{ label: 'Holding time', value: holdingTime },

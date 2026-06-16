@@ -13,6 +13,7 @@ interface SettingsViewProps {
 
 function SettingsView({ plugin }: SettingsViewProps) {
 	const [journalFolder, setJournalFolder] = useState(plugin.settings.journalFolder);
+	const [liveJournalFolder, setLiveJournalFolder] = useState(plugin.settings.liveJournalFolder);
 	const [symbols, setSymbols] = useState(plugin.settings.symbols);
 	const [newSymbol, setNewSymbol] = useState('');
 	const [timeframes, setTimeframes] = useState(plugin.settings.timeframes);
@@ -22,6 +23,12 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const saveJournalFolder = (value: string) => {
 		setJournalFolder(value);
 		plugin.settings.journalFolder = value;
+		void plugin.saveSettings();
+	};
+
+	const saveLiveJournalFolder = (value: string) => {
+		setLiveJournalFolder(value);
+		plugin.settings.liveJournalFolder = value;
 		void plugin.saveSettings();
 	};
 
@@ -103,13 +110,24 @@ function SettingsView({ plugin }: SettingsViewProps) {
 			<h2>Trader Journal settings</h2>
 
 			<label className="trader-journal-setting">
-				<span className="trader-journal-setting__label">Journal folder</span>
-				<span className="trader-journal-setting__description">Root folder for symbol daily notes.</span>
+				<span className="trader-journal-setting__label">Backtest journal folder</span>
+				<span className="trader-journal-setting__description">Root folder for backtest daily notes.</span>
 				<input
 					type="text"
 					value={journalFolder}
 					placeholder="Trading/Backtests"
 					onChange={(event: ChangeEvent<HTMLInputElement>) => saveJournalFolder(event.target.value)}
+				/>
+			</label>
+
+			<label className="trader-journal-setting">
+				<span className="trader-journal-setting__label">Live journal folder</span>
+				<span className="trader-journal-setting__description">Root folder for live trade daily notes.</span>
+				<input
+					type="text"
+					value={liveJournalFolder}
+					placeholder="Trading/Live"
+					onChange={(event: ChangeEvent<HTMLInputElement>) => saveLiveJournalFolder(event.target.value)}
 				/>
 			</label>
 

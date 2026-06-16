@@ -13,6 +13,14 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 	});
 
 	plugin.addCommand({
+		id: 'add-live-trade',
+		name: 'Add live trade',
+		callback: () => {
+			new TraderJournalModal(plugin.app, plugin, 'live').open();
+		},
+	});
+
+	plugin.addCommand({
 		id: 'recalculate-current-journal-stats',
 		name: 'Recalculate current stats',
 		callback: () => {

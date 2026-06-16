@@ -14,6 +14,7 @@ const SIDE_LABELS: Record<string, string> = {
 export const KNOWN_TRADE_FIELDS = new Set([
 	'schemaVersion',
 	'id',
+	'journal_type',
 	'symbol',
 	'side',
 	'setup',
@@ -21,6 +22,9 @@ export const KNOWN_TRADE_FIELDS = new Set([
 	'result',
 	'rr',
 	'tags',
+	'entry_price',
+	'exit_price',
+	'take_profit',
 	'images',
 	'notes',
 	'opened_at',
@@ -122,6 +126,15 @@ export function formatDuration(minutes: number | null): string {
 	}
 
 	return `${hours}h ${remainingMinutes}m`;
+}
+
+export function formatPrice(value: unknown): string {
+	const parsed = parseNumber(value);
+	if (parsed !== null) {
+		return formatNumber(parsed);
+	}
+
+	return stringifyValue(value);
 }
 
 export function normalizeTradeImages(value: unknown): NormalizedTradeImage[] {

@@ -8,9 +8,11 @@ import {
 	stringifyValue,
 } from './format';
 import { TRADE_CODE_BLOCK_LANGUAGE } from './types';
-import type { TradeEntry } from './types';
+import type { TradeEntry, TradeJournalType } from './types';
 
-const NOTE_TYPE = 'trader-journal-symbol-day';
+const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
+const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
+const DEFAULT_JOURNAL_TYPE: TradeJournalType = 'backtest';
 const SCHEMA_VERSION = 1;
 const SUMMARY_START = '<!-- trader-journal:summary:start -->';
 const SUMMARY_END = '<!-- trader-journal:summary:end -->';
@@ -44,6 +46,7 @@ export interface RebuildDailyNoteStatsResult {
 interface JournalIdentity {
 	symbol: string;
 	journalDate: string;
+	journalType: TradeJournalType;
 }
 
 interface RebuiltNote {
@@ -68,12 +71,13 @@ export async function saveTradeToDailyNote(
 		throw new Error('Symbol is required.');
 	}
 
-	const filePath = getJournalFilePath(plugin.settings.journalFolder, symbol, journalDate);
+	const journalType = normalizeJournalType(trade.journal_type);
+	const filePath = getJournalFilePath(getJournalRootFolder(plugin, journalType), symbol, journalDate);
 	await ensureFolder(plugin, getParentPath(filePath));
 
 	let file = getFile(plugin, filePath);
 	if (!file) {
-		file = await plugin.app.vault.create(filePath, renderInitialNote(symbol, journalDate));
+		file = await plugin.app.vault.create(filePath, renderInitialNote(symbol, journalDate, journalType));
 	}
 
 	await plugin.app.vault.process(file, (content) => {
@@ -86,6 +90,7 @@ export async function saveTradeToDailyNote(
 	await rebuildDailyNoteStats(plugin, file, {
 		symbol,
 		journalDate,
+		journalType,
 	});
 
 	return file;
@@ -164,7 +169,10 @@ export function isPotentialJournalFile(plugin: TraderJournalPlugin, file: TFile)
 	}
 
 	const journalFolder = normalizePath(plugin.settings.journalFolder).replace(/\/$/, '');
-	return Boolean(journalFolder) && file.path.startsWith(`${journalFolder}/`);
+	const liveJournalFolder = normalizePath(plugin.settings.liveJournalFolder).replace(/\/$/, '');
+	const journalFolders = [journalFolder, liveJournalFolder].filter(Boolean);
+
+	return journalFolders.some((folder) => file.path.startsWith(`${folder}/`));
 }
 
 export function getJournalFilePath(rootFolder: string, symbol: string, journalDate: string): string {
@@ -197,11 +205,12 @@ export function calculateHoldingTime(openedAt: string, closedAt: string): number
 	return Math.round((closedAtMs - openedAtMs) / 60000);
 }
 
-function renderInitialNote(symbol: string, journalDate: string): string {
+function renderInitialNote(symbol: string, journalDate: string, journalType: TradeJournalType): string {
 	const stats = getEmptyStats();
 	const frontmatter = stringifyYaml({
-		type: NOTE_TYPE,
+		type: getNoteType(journalType),
 		schemaVersion: SCHEMA_VERSION,
+		journalType,
 		symbol,
 		journalDate,
 		tradeCount: 0,
@@ -217,7 +226,7 @@ function renderInitialNote(symbol: string, journalDate: string): string {
 		tradeTags: [],
 	});
 
-	return `---\n${frontmatter}---\n\n${renderDailySummary(symbol, journalDate, stats)}\n\n## Trades\n`;
+	return `---\n${frontmatter}---\n\n${renderDailySummary(symbol, journalDate, journalType, stats)}\n\n## Trades\n`;
 }
 
 function appendTradeBlock(body: string, trade: TradeEntry): string {
@@ -237,7 +246,12 @@ function renderTradeHeading(trade: TradeEntry): string {
 	return `### ${titleParts.length ? titleParts.join(' ') : 'Trade'}`;
 }
 
-function renderDailySummary(symbol: string, journalDate: string, stats: DailyTradeStats): string {
+function renderDailySummary(
+	symbol: string,
+	journalDate: string,
+	journalType: TradeJournalType,
+	stats: DailyTradeStats,
+): string {
 	const invalidBlockLabel = stats.invalidTradeBlockCount === 1 ? 'block was' : 'blocks were';
 	const invalidBlockWarning =
 		stats.invalidTradeBlockCount === 0
@@ -247,7 +261,7 @@ function renderDailySummary(symbol: string, journalDate: string, stats: DailyTra
 	return `${SUMMARY_START}
 ## Summary
 
-${symbol} / ${journalDate}
+${getJournalTypeLabel(journalType)} / ${symbol} / ${journalDate}
 
 | Trades | WIN | Thua | Hoà vốn | Win rate | Net RR | Avg RR | Best RR | Worst RR |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -265,9 +279,9 @@ function buildRebuiltNote(
 	const extractedTrades = extractTrades(body);
 	const { trades } = extractedTrades;
 	const isJournalNote =
-		stringifyValue(parsedFrontmatter.type) === NOTE_TYPE ||
+		isKnownNoteType(stringifyValue(parsedFrontmatter.type)) ||
 		body.includes(`\`\`\`${TRADE_CODE_BLOCK_LANGUAGE}`) ||
-		Boolean(fallbackIdentity?.symbol || fallbackIdentity?.journalDate);
+		Boolean(fallbackIdentity?.symbol || fallbackIdentity?.journalDate || fallbackIdentity?.journalType);
 
 	if (!isJournalNote) {
 		return {
@@ -281,7 +295,7 @@ function buildRebuiltNote(
 	const identity = getJournalIdentity(file, parsedFrontmatter, trades, fallbackIdentity);
 	const stats = calculateDailyTradeStats(trades, extractedTrades.invalidTradeBlockCount);
 	const metadata = createDailyMetadata(identity, stats);
-	const summary = renderDailySummary(identity.symbol, identity.journalDate, stats);
+	const summary = renderDailySummary(identity.symbol, identity.journalDate, identity.journalType, stats);
 	const bodyWithSummary = upsertSummary(ensureTradesSection(body), summary);
 
 	return {
@@ -294,8 +308,9 @@ function buildRebuiltNote(
 
 function createDailyMetadata(identity: JournalIdentity, stats: DailyTradeStats): Record<string, unknown> {
 	return {
-		type: NOTE_TYPE,
+		type: getNoteType(identity.journalType),
 		schemaVersion: SCHEMA_VERSION,
+		journalType: identity.journalType,
 		symbol: identity.symbol,
 		journalDate: identity.journalDate,
 		tradeCount: stats.tradeCount,
@@ -319,6 +334,7 @@ function getJournalIdentity(
 	fallbackIdentity: Partial<JournalIdentity> | undefined,
 ): JournalIdentity {
 	const firstTrade = trades[0];
+	const journalType = getJournalType(frontmatter, firstTrade, fallbackIdentity);
 	const symbol =
 		fallbackIdentity?.symbol ||
 		stringifyValue(frontmatter.symbol) ||
@@ -338,7 +354,49 @@ function getJournalIdentity(
 	return {
 		symbol,
 		journalDate,
+		journalType,
 	};
+}
+
+function getJournalRootFolder(plugin: TraderJournalPlugin, journalType: TradeJournalType): string {
+	return journalType === 'live' ? plugin.settings.liveJournalFolder : plugin.settings.journalFolder;
+}
+
+function getJournalType(
+	frontmatter: Record<string, unknown>,
+	firstTrade: TradeEntry | undefined,
+	fallbackIdentity: Partial<JournalIdentity> | undefined,
+): TradeJournalType {
+	const noteType = stringifyValue(frontmatter.type);
+	if (noteType === LIVE_NOTE_TYPE) {
+		return 'live';
+	}
+
+	if (noteType === BACKTEST_NOTE_TYPE) {
+		return 'backtest';
+	}
+
+	return normalizeJournalType(
+		fallbackIdentity?.journalType ||
+			stringifyValue(frontmatter.journalType) ||
+			stringifyValue(firstTrade?.journal_type),
+	);
+}
+
+function normalizeJournalType(value: unknown): TradeJournalType {
+	return value === 'live' ? 'live' : DEFAULT_JOURNAL_TYPE;
+}
+
+function getNoteType(journalType: TradeJournalType): string {
+	return journalType === 'live' ? LIVE_NOTE_TYPE : BACKTEST_NOTE_TYPE;
+}
+
+function isKnownNoteType(noteType: string): boolean {
+	return noteType === BACKTEST_NOTE_TYPE || noteType === LIVE_NOTE_TYPE;
+}
+
+function getJournalTypeLabel(journalType: TradeJournalType): string {
+	return journalType === 'live' ? 'Live' : 'Backtest';
 }
 
 function upsertSummary(body: string, summary: string): string {

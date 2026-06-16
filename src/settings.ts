@@ -1,5 +1,6 @@
 export interface TraderJournalSettings {
 	journalFolder: string;
+	liveJournalFolder: string;
 	symbols: string[];
 	timeframes: string[];
 	allowRemoteImages: boolean;
@@ -7,6 +8,7 @@ export interface TraderJournalSettings {
 
 export const DEFAULT_SETTINGS: TraderJournalSettings = {
 	journalFolder: 'Trading/Backtests',
+	liveJournalFolder: 'Trading/Live',
 	symbols: ['NQ', 'ES'],
 	timeframes: ['1m', '3m', '5m', '15m', '1h'],
 	allowRemoteImages: false,
@@ -15,6 +17,7 @@ export const DEFAULT_SETTINGS: TraderJournalSettings = {
 export function normalizeSettings(settings: Partial<TraderJournalSettings> | null | undefined): TraderJournalSettings {
 	return {
 		journalFolder: settings?.journalFolder?.trim() || DEFAULT_SETTINGS.journalFolder,
+		liveJournalFolder: settings?.liveJournalFolder?.trim() || DEFAULT_SETTINGS.liveJournalFolder,
 		symbols: normalizeStringList(settings?.symbols, DEFAULT_SETTINGS.symbols, normalizeSymbol),
 		timeframes: normalizeStringList(settings?.timeframes, DEFAULT_SETTINGS.timeframes, normalizeTimeframe),
 		allowRemoteImages: settings?.allowRemoteImages === true,

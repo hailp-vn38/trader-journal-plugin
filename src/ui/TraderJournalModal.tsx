@@ -12,7 +12,7 @@ import {
 	createTradeId,
 	saveTradeToDailyNote,
 } from '../trades/storage';
-import type { TradeEntry, TradeImage, TradeResult, TradeSide } from '../trades/types';
+import type { TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
 
 const SIDE_OPTIONS: Array<{ value: TradeSide; label: string }> = [
 	{ value: 'long', label: 'Long' },
@@ -27,6 +27,7 @@ const RESULT_OPTIONS: Array<{ value: TradeResult; label: string }> = [
 
 interface TraderJournalModalContentProps {
 	plugin: TraderJournalPlugin;
+	journalType: TradeJournalType;
 	closeModal: () => void;
 }
 
@@ -38,13 +39,16 @@ interface TradeFormState {
 	result: TradeResult;
 	rr: string;
 	tags: string;
+	entryPrice: string;
+	exitPrice: string;
+	takeProfit: string;
 	images: TradeImage[];
 	notes: string;
 	openedAt: string;
 	closedAt: string;
 }
 
-function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalContentProps) {
+function TraderJournalModalContent({ plugin, journalType, closeModal }: TraderJournalModalContentProps) {
 	const [form, setForm] = useState<TradeFormState>(() => ({
 		symbol: plugin.settings.symbols[0] ?? '',
 		side: 'long',
@@ -53,6 +57,9 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 		result: 'win',
 		rr: '',
 		tags: '',
+		entryPrice: '',
+		exitPrice: '',
+		takeProfit: '',
 		images: [],
 		notes: '',
 		openedAt: '',
@@ -66,6 +73,11 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 	const savedTradeRef = useRef(false);
 
 	const holdingTime = useMemo(() => calculateHoldingTime(form.openedAt, form.closedAt), [form.openedAt, form.closedAt]);
+	const liveRr = useMemo(
+		() => calculateLiveRr(form.side, form.entryPrice, form.exitPrice, form.takeProfit),
+		[form.entryPrice, form.exitPrice, form.side, form.takeProfit],
+	);
+	const isLiveJournal = journalType === 'live';
 
 	useEffect(
 		() => () => {
@@ -149,7 +161,7 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 			setIsPastingImage(true);
 			setError('');
 			const savedImages = await Promise.all(
-				imageFiles.map((imageFile) => savePastedImage(plugin, imageFile, form.symbol)),
+				imageFiles.map((imageFile) => savePastedImage(plugin, imageFile, form.symbol, journalType)),
 			);
 			for (const image of savedImages) {
 				if (image.type === 'file' && image.value) {
@@ -175,7 +187,7 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 	};
 
 	const saveTrade = async () => {
-		const validationError = validateForm(form);
+		const validationError = validateForm(form, journalType);
 		if (validationError) {
 			setError(validationError);
 			return;
@@ -185,6 +197,7 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 		const journalDate = getTodayDateInput();
 		const openedAt = toLocalIsoString(form.openedAt);
 		const closedAt = toLocalIsoString(form.closedAt);
+		const rr = isLiveJournal ? (liveRr ?? 0) : Number(form.rr);
 		const pendingImage = createTradeImage(imageInput);
 		const images =
 			pendingImage && !form.images.some((image) => image.value === pendingImage.value)
@@ -193,19 +206,26 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 		const trade: TradeEntry = {
 			schemaVersion: 1,
 			id: createTradeId(symbol, openedAt, journalDate),
+			journal_type: journalType,
 			symbol,
 			side: form.side,
 			setup: form.setup.trim(),
 			timeframe: form.timeframe,
 			result: form.result,
-			rr: Number(form.rr),
-			tags: parseTags(form.tags),
+			rr,
 			images,
 			notes: form.notes.trim(),
 			opened_at: openedAt,
 			closed_at: closedAt,
 			holding_time: calculateHoldingTime(openedAt, closedAt),
 		};
+		if (!isLiveJournal) {
+			trade.tags = parseTags(form.tags);
+		} else {
+			trade.entry_price = Number(form.entryPrice);
+			trade.exit_price = Number(form.exitPrice);
+			trade.take_profit = Number(form.takeProfit);
+		}
 
 		try {
 			setIsSaving(true);
@@ -223,7 +243,7 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 
 	return (
 		<form className="trader-journal-modal trader-journal-form" onSubmit={handleSubmit}>
-			<h2>Add backtest trade</h2>
+			<h2>{isLiveJournal ? 'Add live trade' : 'Add backtest trade'}</h2>
 
 			{error ? <div className="trader-journal-form__error">{error}</div> : null}
 
@@ -291,16 +311,55 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 				</label>
 
 				<label className="trader-journal-field">
-					<span>RR</span>
-					<input
-						type="number"
-						step="0.01"
-						value={form.rr}
-						placeholder="2"
-						onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('rr', event.target.value)}
-						required
-					/>
+					<span>{isLiveJournal ? 'Entry price' : 'RR'}</span>
+					{isLiveJournal ? (
+						<input
+							type="number"
+							step="0.01"
+							value={form.entryPrice}
+							placeholder="100"
+							onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('entryPrice', event.target.value)}
+							required
+						/>
+					) : (
+						<input
+							type="number"
+							step="0.01"
+							value={form.rr}
+							placeholder="2"
+							onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('rr', event.target.value)}
+							required
+						/>
+					)}
 				</label>
+
+				{isLiveJournal ? (
+					<>
+						<label className="trader-journal-field">
+							<span>Exit price</span>
+							<input
+								type="number"
+								step="0.01"
+								value={form.exitPrice}
+								placeholder="102"
+								onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('exitPrice', event.target.value)}
+								required
+							/>
+						</label>
+
+						<label className="trader-journal-field">
+							<span>Take profit</span>
+							<input
+								type="number"
+								step="0.01"
+								value={form.takeProfit}
+								placeholder="104"
+								onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('takeProfit', event.target.value)}
+								required
+							/>
+						</label>
+					</>
+				) : null}
 
 				<label className="trader-journal-field">
 					<span>Opened at</span>
@@ -326,6 +385,13 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 					<span>Holding time</span>
 					<strong>{formatDuration(holdingTime) || '-'}</strong>
 				</div>
+
+				{isLiveJournal ? (
+					<div className="trader-journal-field trader-journal-field--readonly">
+						<span>RR</span>
+						<strong>{liveRr === null ? '-' : `${formatComputedRr(liveRr)}R`}</strong>
+					</div>
+				) : null}
 			</div>
 
 			<label className="trader-journal-field">
@@ -339,15 +405,17 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 				/>
 			</label>
 
-			<label className="trader-journal-field">
-				<span>Tags</span>
-				<input
-					type="text"
-					value={form.tags}
-					placeholder="breakout, trend"
-					onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('tags', event.target.value)}
-				/>
-			</label>
+			{isLiveJournal ? null : (
+				<label className="trader-journal-field">
+					<span>Tags</span>
+					<input
+						type="text"
+						value={form.tags}
+						placeholder="breakout, trend"
+						onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('tags', event.target.value)}
+					/>
+				</label>
+			)}
 
 			<div className="trader-journal-field trader-journal-field--images">
 				<span>Images</span>
@@ -402,11 +470,13 @@ function TraderJournalModalContent({ plugin, closeModal }: TraderJournalModalCon
 
 export class TraderJournalModal extends Modal {
 	private readonly plugin: TraderJournalPlugin;
+	private readonly journalType: TradeJournalType;
 	private root: Root | null = null;
 
-	constructor(app: App, plugin: TraderJournalPlugin) {
+	constructor(app: App, plugin: TraderJournalPlugin, journalType: TradeJournalType = 'backtest') {
 		super(app);
 		this.plugin = plugin;
+		this.journalType = journalType;
 	}
 
 	onOpen() {
@@ -415,11 +485,15 @@ export class TraderJournalModal extends Modal {
 		this.contentEl.addClass('trader-journal-modal-content');
 		this.contentEl.empty();
 		this.root = createRoot(this.contentEl);
-		this.root.render(
-			<StrictMode>
-				<TraderJournalModalContent plugin={this.plugin} closeModal={() => this.close()} />
-			</StrictMode>,
-		);
+			this.root.render(
+				<StrictMode>
+					<TraderJournalModalContent
+						plugin={this.plugin}
+						journalType={this.journalType}
+						closeModal={() => this.close()}
+					/>
+				</StrictMode>,
+			);
 	}
 
 	onClose() {
@@ -431,7 +505,7 @@ export class TraderJournalModal extends Modal {
 	}
 }
 
-function validateForm(form: TradeFormState): string | null {
+function validateForm(form: TradeFormState, journalType: TradeJournalType): string | null {
 	if (!normalizeSymbol(form.symbol)) {
 		return 'Symbol is required.';
 	}
@@ -445,8 +519,38 @@ function validateForm(form: TradeFormState): string | null {
 	}
 
 	const rr = Number(form.rr);
-	if (!Number.isFinite(rr)) {
+	if (journalType === 'backtest' && !Number.isFinite(rr)) {
 		return 'RR must be a number.';
+	}
+
+	if (journalType === 'live') {
+		const entryPrice = parseRequiredNumber(form.entryPrice);
+		const exitPrice = parseRequiredNumber(form.exitPrice);
+		const takeProfit = parseRequiredNumber(form.takeProfit);
+
+		if (entryPrice === null) {
+			return 'Entry price must be a number.';
+		}
+
+		if (exitPrice === null) {
+			return 'Exit price must be a number.';
+		}
+
+		if (takeProfit === null) {
+			return 'Take profit must be a number.';
+		}
+
+		if (form.side === 'long' && takeProfit <= entryPrice) {
+			return 'Long take profit must be above entry price.';
+		}
+
+		if (form.side === 'short' && takeProfit >= entryPrice) {
+			return 'Short take profit must be below entry price.';
+		}
+
+		if (calculateLiveRr(form.side, form.entryPrice, form.exitPrice, form.takeProfit) === null) {
+			return 'Take profit must be different from entry price.';
+		}
 	}
 
 	if (!form.openedAt || !form.closedAt) {
@@ -458,6 +562,40 @@ function validateForm(form: TradeFormState): string | null {
 	}
 
 	return null;
+}
+
+function calculateLiveRr(side: TradeSide, entryPrice: string, exitPrice: string, takeProfit: string): number | null {
+	const entry = parseRequiredNumber(entryPrice);
+	const exit = parseRequiredNumber(exitPrice);
+	const target = parseRequiredNumber(takeProfit);
+	if (entry === null || exit === null || target === null) {
+		return null;
+	}
+
+	const plannedMove = Math.abs(target - entry);
+	if (plannedMove === 0) {
+		return null;
+	}
+
+	const realizedMove = side === 'short' ? entry - exit : exit - entry;
+	return roundNumber(realizedMove / plannedMove);
+}
+
+function parseRequiredNumber(value: string): number | null {
+	if (!value.trim()) {
+		return null;
+	}
+
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatComputedRr(value: number): string {
+	return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function roundNumber(value: number): number {
+	return Number(value.toFixed(2));
 }
 
 function parseTags(value: string): string[] {
@@ -514,8 +652,9 @@ async function savePastedImage(
 	plugin: TraderJournalPlugin,
 	imageFile: File,
 	symbol: string,
+	journalType: TradeJournalType,
 ): Promise<TradeImage> {
-	const attachmentFolder = getAttachmentFolder(plugin);
+	const attachmentFolder = getAttachmentFolder(plugin, journalType);
 	await ensureVaultFolder(plugin, attachmentFolder);
 
 	const attachmentPath = getUniqueAttachmentPath(plugin, attachmentFolder, imageFile, symbol);
@@ -545,8 +684,10 @@ async function deleteCreatedAttachment(plugin: TraderJournalPlugin, attachmentPa
 	}
 }
 
-function getAttachmentFolder(plugin: TraderJournalPlugin): string {
-	const journalFolder = normalizePath(plugin.settings.journalFolder).replace(/\/$/, '');
+function getAttachmentFolder(plugin: TraderJournalPlugin, journalType: TradeJournalType): string {
+	const journalFolder = normalizePath(
+		journalType === 'live' ? plugin.settings.liveJournalFolder : plugin.settings.journalFolder,
+	).replace(/\/$/, '');
 	return normalizePath(`${journalFolder}/_attachments`);
 }
 
@@ -672,9 +813,11 @@ function resolveImagePreviewSource(plugin: TraderJournalPlugin, image: TradeImag
 
 function findVaultImage(plugin: TraderJournalPlugin, rawPath: string): TFile | null {
 	const journalFolder = normalizePath(plugin.settings.journalFolder).replace(/\/$/, '');
+	const liveJournalFolder = normalizePath(plugin.settings.liveJournalFolder).replace(/\/$/, '');
 	const candidates = [
 		normalizePath(rawPath.replace(/^\/+/, '')),
 		normalizePath(`${journalFolder}/_attachments/${rawPath}`),
+		normalizePath(`${liveJournalFolder}/_attachments/${rawPath}`),
 	];
 
 	for (const candidate of [...new Set(candidates.filter(Boolean))]) {
