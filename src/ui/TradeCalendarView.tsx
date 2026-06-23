@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
+import { TradePlanModal } from './TradePlanModal';
 import { TraderJournalModal } from './TraderJournalModal';
 import { CALENDAR_DISPLAY_MODE_CHANGE_EVENT, LANGUAGE_CHANGE_EVENT } from '../settings';
 import type { CalendarDisplayMode, TraderJournalLanguage } from '../settings';
@@ -21,6 +22,12 @@ import {
 	type JournalCalendarSnapshot,
 	type JournalCalendarTrade,
 } from '../trades/journalIndex';
+import {
+	JournalPlanIndex,
+	type JournalCalendarPlan,
+	type JournalCalendarPlanDay,
+	type JournalPlanSnapshot,
+} from '../plans/planIndex';
 import { formatResult, formatSide, stringifyValue } from '../trades/format';
 import type { TradeJournalType } from '../trades/types';
 
@@ -33,6 +40,12 @@ const EMPTY_SNAPSHOT: JournalCalendarSnapshot = {
 	daysByDate: {},
 	dayDates: [],
 	tradeCount: 0,
+};
+
+const EMPTY_PLAN_SNAPSHOT: JournalPlanSnapshot = {
+	daysByDate: {},
+	dayDates: [],
+	planCount: 0,
 };
 
 type TradeCalendarFilter = TradeJournalType;
@@ -119,6 +132,7 @@ export class TraderJournalCalendarView extends ItemView {
 function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const [today, setToday] = useState(() => formatDateKey(new Date()));
 	const [snapshot, setSnapshot] = useState<JournalCalendarSnapshot>(EMPTY_SNAPSHOT);
+	const [planSnapshot, setPlanSnapshot] = useState<JournalPlanSnapshot>(EMPTY_PLAN_SNAPSHOT);
 	const [selectedDate, setSelectedDate] = useState(today);
 	const [visibleMonth, setVisibleMonth] = useState(getMonthKey(today));
 	const [journalTypeFilter, setJournalTypeFilter] = useState<TradeCalendarFilter>('live');
@@ -139,20 +153,32 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const weekdayLabels = getWeekdayLabels(language);
 
 	useEffect(() => {
-		const index = new JournalCalendarIndex(plugin);
+		const tradeIndex = new JournalCalendarIndex(plugin);
+		const planIndex = new JournalPlanIndex(plugin);
 		const fileUpdateTimers = new Map<string, number>();
 		let disposed = false;
 
-		const applySnapshot = (nextSnapshot: JournalCalendarSnapshot) => {
+		const applyTradeSnapshot = (nextSnapshot: JournalCalendarSnapshot) => {
 			if (!disposed) {
 				setSnapshot(nextSnapshot);
+			}
+		};
+
+		const applyPlanSnapshot = (nextSnapshot: JournalPlanSnapshot) => {
+			if (!disposed) {
+				setPlanSnapshot(nextSnapshot);
 			}
 		};
 
 		const rebuild = async () => {
 			try {
 				setIsLoading(true);
-				applySnapshot(await index.rebuild());
+				const [nextTradeSnapshot, nextPlanSnapshot] = await Promise.all([
+					tradeIndex.rebuild(),
+					planIndex.rebuild(),
+				]);
+				applyTradeSnapshot(nextTradeSnapshot);
+				applyPlanSnapshot(nextPlanSnapshot);
 			} finally {
 				if (!disposed) {
 					setIsLoading(false);
@@ -161,7 +187,12 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		};
 
 		const updateFile = async (file: TFile) => {
-			applySnapshot(await index.updateFile(file));
+			const [nextTradeSnapshot, nextPlanSnapshot] = await Promise.all([
+				tradeIndex.updateFile(file),
+				planIndex.updateFile(file),
+			]);
+			applyTradeSnapshot(nextTradeSnapshot);
+			applyPlanSnapshot(nextPlanSnapshot);
 		};
 
 		const scheduleFileUpdate = (file: TFile) => {
@@ -192,10 +223,12 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 				}
 			}),
 			plugin.app.vault.on('delete', (file: TAbstractFile) => {
-				applySnapshot(index.removePath(file.path));
+				applyTradeSnapshot(tradeIndex.removePath(file.path));
+				applyPlanSnapshot(planIndex.removePath(file.path));
 			}),
 			plugin.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
-				applySnapshot(index.removePath(oldPath));
+				applyTradeSnapshot(tradeIndex.removePath(oldPath));
+				applyPlanSnapshot(planIndex.removePath(oldPath));
 				if (file instanceof TFile) {
 					scheduleFileUpdate(file);
 				}
@@ -274,6 +307,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		() => filterSnapshotByJournalType(snapshot, journalTypeFilter),
 		[snapshot, journalTypeFilter],
 	);
+	const plansById = useMemo(() => createPlansById(planSnapshot), [planSnapshot]);
 
 	useEffect(() => {
 		if (isLoading) {
@@ -288,20 +322,20 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		}
 
 		initialSelectionAppliedRef.current = true;
-		if (filteredSnapshot.daysByDate[selectedDate]) {
-			return;
+		const targetDate = getAutoSelectedDate(journalTypeFilter, filteredSnapshot, planSnapshot, today);
+		if (targetDate && targetDate !== selectedDate) {
+			setSelectedDate(targetDate);
+			setVisibleMonth(getMonthKey(targetDate));
 		}
-
-		const latestDate = filteredSnapshot.dayDates[filteredSnapshot.dayDates.length - 1];
-		if (latestDate) {
-			setSelectedDate(latestDate);
-			setVisibleMonth(getMonthKey(latestDate));
-		}
-	}, [filteredSnapshot, isLoading, journalTypeFilter, selectedDate]);
+	}, [filteredSnapshot, isLoading, journalTypeFilter, planSnapshot, selectedDate, today]);
 
 	const calendarDates = useMemo(() => getCalendarDates(visibleMonth), [visibleMonth]);
 	const horizontalCalendarDates = useMemo(() => getMonthDates(visibleMonth), [visibleMonth]);
 	const selectedDay = filteredSnapshot.daysByDate[selectedDate] ?? createEmptyDay(selectedDate);
+	const selectedPlanDay =
+		journalTypeFilter === 'live'
+			? planSnapshot.daysByDate[selectedDate] ?? createEmptyPlanDay(selectedDate)
+			: createEmptyPlanDay(selectedDate);
 
 	useEffect(() => {
 		if (calendarDisplayMode !== 'horizontal_calendar') {
@@ -416,6 +450,10 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		new TraderJournalModal(plugin.app, plugin, journalTypeFilter).open();
 	};
 
+	const openCreatePlanModal = () => {
+		new TradePlanModal(plugin.app, plugin).open();
+	};
+
 	return (
 		<div className="trader-journal-calendar">
 			<header className="trader-journal-calendar__header">
@@ -451,6 +489,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 						<HorizontalCalendarDateButton
 							calendarDate={calendarDate}
 							day={snapshot.daysByDate[calendarDate.date]}
+							planDay={planSnapshot.daysByDate[calendarDate.date]}
 							isSelected={calendarDate.date === selectedDate}
 							isToday={calendarDate.date === today}
 							key={calendarDate.date}
@@ -474,6 +513,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 							<CalendarDateButton
 								calendarDate={calendarDate}
 								day={snapshot.daysByDate[calendarDate.date]}
+								planDay={planSnapshot.daysByDate[calendarDate.date]}
 								isSelected={calendarDate.date === selectedDate}
 								isToday={calendarDate.date === today}
 								key={calendarDate.date}
@@ -498,6 +538,13 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 							})}
 							onClick={openCreateTradeModal}
 						/>
+						{journalTypeFilter === 'live' ? (
+							<CalendarIconButton
+								icon="clipboard-list"
+								label={tr('calendar.addPlan')}
+								onClick={openCreatePlanModal}
+							/>
+						) : null}
 						<select
 							className="trader-journal-calendar__filter"
 							value={journalTypeFilter}
@@ -512,19 +559,46 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 
 				{isLoading ? (
 					<div className="trader-journal-calendar__empty">{tr('calendar.loadingTrades')}</div>
-				) : selectedDay.trades.length > 0 ? (
-					<div className="trader-journal-calendar__trade-list">
-						{selectedDay.trades.map((trade) => (
-							<TradeCalendarCard
-								language={language}
-								plugin={plugin}
-								trade={trade}
-								key={`${trade.filePath}-${trade.id}`}
-							/>
-						))}
-					</div>
 				) : (
-					<div className="trader-journal-calendar__empty">{tr('calendar.noTrades')}</div>
+					<>
+						{journalTypeFilter === 'live' && selectedPlanDay.plans.length > 0 ? (
+							<section className="trader-journal-calendar__section">
+								<div className="trader-journal-calendar__section-title">{tr('calendar.plans')}</div>
+								<div className="trader-journal-calendar__trade-list">
+									{selectedPlanDay.plans.map((plan) => (
+										<PlanCalendarCard
+											language={language}
+											plugin={plugin}
+											plan={plan}
+											linkedTrades={selectedDay.trades.filter(
+												(trade) => stringifyValue(trade.trade.plan_id) === plan.id,
+											)}
+											key={`${plan.filePath}-${plan.id}`}
+										/>
+									))}
+								</div>
+							</section>
+						) : null}
+
+						<section className="trader-journal-calendar__section">
+							<div className="trader-journal-calendar__section-title">{tr('calendar.trades')}</div>
+							{selectedDay.trades.length > 0 ? (
+								<div className="trader-journal-calendar__trade-list">
+									{selectedDay.trades.map((trade) => (
+										<TradeCalendarCard
+											language={language}
+											plugin={plugin}
+											planTitle={getPlanTitleForTrade(trade, plansById)}
+											trade={trade}
+											key={`${trade.filePath}-${trade.id}`}
+										/>
+									))}
+								</div>
+							) : (
+								<div className="trader-journal-calendar__empty">{tr('calendar.noTrades')}</div>
+							)}
+						</section>
+					</>
 				)}
 			</section>
 		</div>
@@ -584,6 +658,7 @@ function CalendarIconButton({
 function CalendarDateButton({
 	calendarDate,
 	day,
+	planDay,
 	isSelected,
 	isToday,
 	language,
@@ -591,6 +666,7 @@ function CalendarDateButton({
 }: {
 	calendarDate: CalendarDateCell;
 	day: JournalCalendarDay | undefined;
+	planDay: JournalCalendarPlanDay | undefined;
 	isSelected: boolean;
 	isToday: boolean;
 	language: TraderJournalLanguage;
@@ -603,6 +679,9 @@ function CalendarDateButton({
 	}
 	if (day?.liveCount) {
 		labelParts.push(`${day.liveCount} ${tr('option.live').toLowerCase()}`);
+	}
+	if (planDay && getPlanCount(planDay) > 0) {
+		labelParts.push(`${getPlanCount(planDay)} ${tr('calendar.plans').toLowerCase()}`);
 	}
 
 	return (
@@ -620,7 +699,7 @@ function CalendarDateButton({
 			data-date={calendarDate.date}
 			onClick={() => onSelect(calendarDate.date)}
 		>
-			<CalendarDotSummary day={day} />
+			<CalendarDotSummary day={day} planDay={planDay} />
 			<span className="trader-journal-calendar-day__number">{calendarDate.dayNumber}</span>
 		</button>
 	);
@@ -629,6 +708,7 @@ function CalendarDateButton({
 function HorizontalCalendarDateButton({
 	calendarDate,
 	day,
+	planDay,
 	isSelected,
 	isToday,
 	language,
@@ -636,6 +716,7 @@ function HorizontalCalendarDateButton({
 }: {
 	calendarDate: CalendarDateCell;
 	day: JournalCalendarDay | undefined;
+	planDay: JournalCalendarPlanDay | undefined;
 	isSelected: boolean;
 	isToday: boolean;
 	language: TraderJournalLanguage;
@@ -654,6 +735,9 @@ function HorizontalCalendarDateButton({
 	if (day?.liveCount) {
 		labelParts.push(`${day.liveCount} ${tr('option.live').toLowerCase()}`);
 	}
+	if (planDay && getPlanCount(planDay) > 0) {
+		labelParts.push(`${getPlanCount(planDay)} ${tr('calendar.plans').toLowerCase()}`);
+	}
 
 	return (
 		<button
@@ -669,14 +753,20 @@ function HorizontalCalendarDateButton({
 			data-date={calendarDate.date}
 			onClick={() => onSelect(calendarDate.date)}
 		>
-			<CalendarDotSummary day={day} />
+			<CalendarDotSummary day={day} planDay={planDay} />
 			<span className="trader-journal-horizontal-calendar-day__weekday">{weekdayLabel}</span>
 			<span className="trader-journal-horizontal-calendar-day__number">{calendarDate.dayNumber}</span>
 		</button>
 	);
 }
 
-function CalendarDotSummary({ day }: { day: JournalCalendarDay | undefined }) {
+function CalendarDotSummary({
+	day,
+	planDay,
+}: {
+	day: JournalCalendarDay | undefined;
+	planDay: JournalCalendarPlanDay | undefined;
+}) {
 	return (
 		<div className="trader-journal-calendar-dots" aria-hidden="true">
 			{day?.backtestCount ? (
@@ -685,16 +775,122 @@ function CalendarDotSummary({ day }: { day: JournalCalendarDay | undefined }) {
 			{day?.liveCount ? (
 				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--live" />
 			) : null}
+			{planDay?.openPlanCount ? (
+				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--plan-open" />
+			) : null}
+			{planDay && planDay.closedPlanCount + planDay.cancelledPlanCount > 0 ? (
+				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--plan-ended" />
+			) : null}
+		</div>
+	);
+}
+
+function PlanCalendarCard({
+	language,
+	linkedTrades,
+	plugin,
+	plan,
+}: {
+	language: TraderJournalLanguage;
+	linkedTrades: JournalCalendarTrade[];
+	plugin: TraderJournalPlugin;
+	plan: JournalCalendarPlan;
+}) {
+	const tr = getTranslator(language);
+	const openPlanFile = async () => {
+		try {
+			await plugin.app.workspace.openLinkText(plan.filePath, '', false);
+		} catch (error) {
+			console.error('Trader Journal failed to open plan note', error);
+			new Notice(tr('calendar.openPlanNoteError'));
+		}
+	};
+
+	const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		if (event.target !== event.currentTarget) {
+			return;
+		}
+
+		if (event.key !== 'Enter' && event.key !== ' ') {
+			return;
+		}
+
+		event.preventDefault();
+		void openPlanFile();
+	};
+
+	const openEditModal = () => {
+		new TradePlanModal(plugin.app, plugin, plan.plan, plan.filePath).open();
+	};
+
+	return (
+		<div
+			className={[
+				'trader-journal-calendar-card',
+				'trader-journal-calendar-card--plan',
+				`trader-journal-calendar-card--plan-${plan.status}`,
+			].join(' ')}
+			role="button"
+			tabIndex={0}
+			onClick={() => void openPlanFile()}
+			onKeyDown={handleKeyDown}
+		>
+			<div className="trader-journal-calendar-card__head">
+				<strong className="trader-journal-calendar-card__symbol">{plan.symbol}</strong>
+				<div className="trader-journal-calendar-card__head-meta">
+					<CalendarIconButton
+						icon="pencil"
+						label={tr('modal.editTradePlan')}
+						onClick={openEditModal}
+						stopPropagation
+						variant="plain"
+					/>
+					<span
+						className={[
+							'trader-journal-calendar-card__status',
+							`trader-journal-calendar-card__status--plan-${plan.status}`,
+						].join(' ')}
+					>
+						{getPlanStatusLabel(tr, plan.status)}
+					</span>
+				</div>
+			</div>
+			<div className="trader-journal-calendar-card__body">
+				<span className="trader-journal-calendar-card__meta">
+					{[plan.title, plan.setup, plan.timeframes.join(', ')].filter(Boolean).join(' · ')}
+				</span>
+				<span className="trader-journal-calendar-card__result">{formatPlanDateRange(plan)}</span>
+			</div>
+			{plan.notes ? <div className="trader-journal-calendar-card__notes">{plan.notes}</div> : null}
+			<div className="trader-journal-calendar-card__plan-meta">
+				{[
+					plan.imageCount ? tr('calendar.imageCount', { count: plan.imageCount }) : '',
+					plan.linkedTradeCount ? tr('calendar.linkedTradeCount', { count: plan.linkedTradeCount }) : '',
+				]
+					.filter(Boolean)
+					.join(' · ')}
+			</div>
+			{linkedTrades.length > 0 ? (
+				<div className="trader-journal-calendar-card__linked-trades">
+					{linkedTrades.map((trade) => (
+						<span key={`${trade.filePath}-${trade.id}`}>
+							{[formatTradeTime(trade.createdAt), trade.side, trade.setup, trade.rr].filter(Boolean).join(' / ')}
+						</span>
+					))}
+				</div>
+			) : null}
 		</div>
 	);
 }
 
 function TradeCalendarCard({
 	language,
+	planTitle,
 	plugin,
 	trade,
 }: {
 	language: TraderJournalLanguage;
+	planTitle: string;
 	plugin: TraderJournalPlugin;
 	trade: JournalCalendarTrade;
 }) {
@@ -778,6 +974,11 @@ function TradeCalendarCard({
 				</span>
 			</div>
 			{trade.notes ? <div className="trader-journal-calendar-card__notes">{trade.notes}</div> : null}
+			{planTitle ? (
+				<div className="trader-journal-calendar-card__plan">
+					{tr('detail.plan')}: {planTitle}
+				</div>
+			) : null}
 		</div>
 	);
 }
@@ -843,6 +1044,92 @@ function createEmptyDay(date: string): JournalCalendarDay {
 		liveCount: 0,
 		trades: [],
 	};
+}
+
+function createEmptyPlanDay(date: string): JournalCalendarPlanDay {
+	return {
+		date,
+		openPlanCount: 0,
+		closedPlanCount: 0,
+		cancelledPlanCount: 0,
+		plans: [],
+	};
+}
+
+function createPlansById(snapshot: JournalPlanSnapshot): Map<string, JournalCalendarPlan> {
+	const plansById = new Map<string, JournalCalendarPlan>();
+
+	for (const day of Object.values(snapshot.daysByDate)) {
+		for (const plan of day.plans) {
+			if (!plansById.has(plan.id)) {
+				plansById.set(plan.id, plan);
+			}
+		}
+	}
+
+	return plansById;
+}
+
+function getAutoSelectedDate(
+	journalTypeFilter: TradeCalendarFilter,
+	tradeSnapshot: JournalCalendarSnapshot,
+	planSnapshot: JournalPlanSnapshot,
+	today: string,
+): string {
+	if (journalTypeFilter === 'live') {
+		if (hasLiveCalendarDataOnDate(tradeSnapshot, planSnapshot, today)) {
+			return today;
+		}
+
+		return getLatestLiveCalendarDate(tradeSnapshot, planSnapshot);
+	}
+
+	return tradeSnapshot.dayDates[tradeSnapshot.dayDates.length - 1] ?? '';
+}
+
+function hasLiveCalendarDataOnDate(
+	tradeSnapshot: JournalCalendarSnapshot,
+	planSnapshot: JournalPlanSnapshot,
+	date: string,
+): boolean {
+	return Boolean(tradeSnapshot.daysByDate[date]?.trades.length || planSnapshot.daysByDate[date]?.openPlanCount);
+}
+
+function getLatestLiveCalendarDate(
+	tradeSnapshot: JournalCalendarSnapshot,
+	planSnapshot: JournalPlanSnapshot,
+): string {
+	const dates = new Set([...tradeSnapshot.dayDates, ...planSnapshot.dayDates]);
+	const sortedDates = [...dates].sort();
+	return sortedDates[sortedDates.length - 1] ?? '';
+}
+
+function getPlanTitleForTrade(
+	trade: JournalCalendarTrade,
+	plansById: Map<string, JournalCalendarPlan>,
+): string {
+	const planId = stringifyValue(trade.trade.plan_id);
+	return planId ? plansById.get(planId)?.title ?? planId : '';
+}
+
+function getPlanCount(planDay: JournalCalendarPlanDay): number {
+	return planDay.openPlanCount + planDay.closedPlanCount + planDay.cancelledPlanCount;
+}
+
+function getPlanStatusLabel(tr: ReturnType<typeof getTranslator>, status: JournalCalendarPlan['status']): string {
+	if (status === 'closed') {
+		return tr('option.closed');
+	}
+
+	if (status === 'cancelled') {
+		return tr('option.cancelled');
+	}
+
+	return tr('option.open');
+}
+
+function formatPlanDateRange(plan: JournalCalendarPlan): string {
+	return [plan.startDate, plan.endDate].filter(Boolean).join(' - ');
 }
 
 function filterSnapshotByJournalType(

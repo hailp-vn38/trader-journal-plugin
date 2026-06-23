@@ -15,6 +15,12 @@ import {
 	saveTradeToDailyNote,
 	updateTradeInJournalFile,
 } from '../trades/storage';
+import {
+	linkTradeToPlan,
+	listTradePlanOptions,
+	unlinkTradeFromPlan,
+} from '../plans/storage';
+import type { TradePlanOption } from '../plans/types';
 import type { LiveTradeStatus, TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
 
 const SIDE_OPTIONS: TradeSide[] = ['long', 'short'];
@@ -30,6 +36,7 @@ interface TraderJournalModalContentProps {
 
 interface TradeFormState {
 	symbol: string;
+	planId: string;
 	status: LiveTradeStatus;
 	side: TradeSide;
 	setup: string;
@@ -59,6 +66,7 @@ function TraderJournalModalContent({
 	const [error, setError] = useState('');
 	const [isSaving, setIsSaving] = useState(false);
 	const [isPastingImage, setIsPastingImage] = useState(false);
+	const [planOptions, setPlanOptions] = useState<TradePlanOption[]>([]);
 	const createdAttachmentPathsRef = useRef<Set<string>>(new Set());
 	const savedTradeRef = useRef(false);
 
@@ -80,6 +88,36 @@ function TraderJournalModalContent({
 		},
 		[plugin],
 	);
+
+	useEffect(() => {
+		if (!isLiveJournal) {
+			return;
+		}
+
+		let disposed = false;
+		const symbol = normalizeSymbol(form.symbol);
+		const date = getDateTimeDatePart(form.openedAt) || getTodayDateInput();
+		void listTradePlanOptions(plugin, {
+			symbol,
+			date,
+			includePlanId: form.planId,
+		})
+			.then((options) => {
+				if (!disposed) {
+					setPlanOptions(options);
+				}
+			})
+			.catch((loadError: unknown) => {
+				console.error('Trader Journal failed to load trade plan options', loadError);
+				if (!disposed) {
+					setPlanOptions([]);
+				}
+			});
+
+		return () => {
+			disposed = true;
+		};
+	}, [form.openedAt, form.planId, form.symbol, isLiveJournal, plugin]);
 
 	function updateField<K extends keyof TradeFormState>(field: K, value: TradeFormState[K]) {
 		setForm((currentForm) => ({
@@ -230,6 +268,9 @@ function TraderJournalModalContent({
 			notes: form.notes.trim(),
 			opened_at: openedAt,
 		};
+		if (isLiveJournal && form.planId) {
+			trade.plan_id = form.planId;
+		}
 		if (!isLiveJournal) {
 			trade.result = form.result;
 			trade.closed_at = closedAt;
@@ -255,6 +296,9 @@ function TraderJournalModalContent({
 				isEditing && targetFilePath
 					? await updateTradeInJournalFile(plugin, targetFilePath, trade)
 					: await saveTradeToDailyNote(plugin, journalDate, trade);
+			if (isLiveJournal) {
+				await syncTradePlanLink(plugin, initialTrade, trade, file.path);
+			}
 			savedTradeRef.current = true;
 			createdAttachmentPathsRef.current.clear();
 			new Notice(tr(isEditing ? 'notice.updatedTrade' : 'notice.savedTrade', { path: file.path }));
@@ -305,6 +349,23 @@ function TraderJournalModalContent({
 						>
 							<option value="open">{tr('option.open')}</option>
 							<option value="closed">{tr('option.closed')}</option>
+						</select>
+					</label>
+				) : null}
+
+				{isLiveJournal ? (
+					<label className="trader-journal-field">
+						<span>{tr('detail.plan')}</span>
+						<select
+							value={form.planId}
+							onChange={(event: ChangeEvent<HTMLSelectElement>) => updateField('planId', event.target.value)}
+						>
+							<option value="">{tr('placeholder.noPlan')}</option>
+							{planOptions.map((plan) => (
+								<option value={plan.id} key={plan.id}>
+									{formatPlanOptionLabel(plan)}
+								</option>
+							))}
 						</select>
 					</label>
 				) : null}
@@ -590,6 +651,7 @@ function createInitialForm(
 
 	return {
 		symbol: stringifyValue(initialTrade?.symbol) || plugin.settings.symbols[0] || '',
+		planId: stringifyValue(initialTrade?.plan_id),
 		status,
 		side: initialTrade?.side === 'short' ? 'short' : 'long',
 		setup: stringifyValue(initialTrade?.setup),
@@ -614,6 +676,44 @@ function getInitialLiveStatus(initialTrade: TradeEntry | undefined): LiveTradeSt
 	}
 
 	return stringifyValue(initialTrade?.closed_at) ? 'closed' : 'open';
+}
+
+async function syncTradePlanLink(
+	plugin: TraderJournalPlugin,
+	initialTrade: TradeEntry | undefined,
+	trade: TradeEntry,
+	filePath: string,
+): Promise<void> {
+	const previousPlanId = stringifyValue(initialTrade?.plan_id);
+	const nextPlanId = stringifyValue(trade.plan_id);
+	const tradeId = stringifyValue(trade.id);
+
+	if (previousPlanId && previousPlanId !== nextPlanId) {
+		await unlinkTradeFromPlan(plugin, previousPlanId, tradeId);
+	}
+
+	if (!nextPlanId) {
+		return;
+	}
+
+	await linkTradeToPlan(plugin, nextPlanId, {
+		trade_id: tradeId,
+		file_path: filePath,
+		label: createTradePlanLinkLabel(trade),
+	});
+}
+
+function createTradePlanLinkLabel(trade: TradeEntry): string {
+	const openedAt = stringifyValue(trade.opened_at);
+	const time = openedAt ? openedAt.slice(11, 16) : '';
+	return [stringifyValue(trade.symbol), time, stringifyValue(trade.side), stringifyValue(trade.setup)]
+		.filter(Boolean)
+		.join(' / ');
+}
+
+function formatPlanOptionLabel(plan: TradePlanOption): string {
+	const endDate = plan.endDate ? ` - ${plan.endDate}` : '';
+	return `${plan.symbol} / ${plan.title} / ${plan.startDate}${endDate}`;
 }
 
 function validateForm(form: TradeFormState, journalType: TradeJournalType, tr: Translator): string | null {

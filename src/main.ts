@@ -9,6 +9,7 @@ import {
 } from './ui/TradeCalendarView';
 import { registerAutoStatsRebuild } from './trades/autoRebuild';
 import { registerTradeBlockProcessor } from './trades/tradeBlockProcessor';
+import { registerPlanBlockProcessor } from './plans/planBlockProcessor';
 import { getTranslator } from './i18n';
 
 export default class TraderJournalPlugin extends Plugin {
@@ -29,6 +30,7 @@ export default class TraderJournalPlugin extends Plugin {
 		registerCommands(this);
 		registerAutoStatsRebuild(this);
 		registerTradeBlockProcessor(this);
+		registerPlanBlockProcessor(this);
 		this.addSettingTab(new TraderJournalSettingTab(this.app, this));
 	}
 

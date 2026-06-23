@@ -22,6 +22,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const [language, setLanguage] = useState(plugin.settings.language);
 	const [journalFolder, setJournalFolder] = useState(plugin.settings.journalFolder);
 	const [liveJournalFolder, setLiveJournalFolder] = useState(plugin.settings.liveJournalFolder);
+	const [planFolder, setPlanFolder] = useState(plugin.settings.planFolder);
 	const [symbols, setSymbols] = useState(plugin.settings.symbols);
 	const [newSymbol, setNewSymbol] = useState('');
 	const [timeframes, setTimeframes] = useState(plugin.settings.timeframes);
@@ -46,6 +47,12 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const saveLiveJournalFolder = (value: string) => {
 		setLiveJournalFolder(value);
 		plugin.settings.liveJournalFolder = value;
+		void plugin.saveSettings();
+	};
+
+	const savePlanFolder = (value: string) => {
+		setPlanFolder(value);
+		plugin.settings.planFolder = value;
 		void plugin.saveSettings();
 	};
 
@@ -166,6 +173,17 @@ function SettingsView({ plugin }: SettingsViewProps) {
 					value={liveJournalFolder}
 					placeholder="Trading/Live"
 					onChange={(event: ChangeEvent<HTMLInputElement>) => saveLiveJournalFolder(event.target.value)}
+				/>
+			</label>
+
+			<label className="trader-journal-setting">
+				<span className="trader-journal-setting__label">{tr('settings.planFolderLabel')}</span>
+				<span className="trader-journal-setting__description">{tr('settings.planFolderDescription')}</span>
+				<input
+					type="text"
+					value={planFolder}
+					placeholder="Trading/Live/_plans"
+					onChange={(event: ChangeEvent<HTMLInputElement>) => savePlanFolder(event.target.value)}
 				/>
 			</label>
 

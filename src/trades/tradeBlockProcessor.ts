@@ -156,6 +156,7 @@ function renderDetails(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade
 	const holdingTime = formatDuration(getHoldingMinutes(trade));
 	const tr = getTranslator(plugin.settings.language);
 	const detailItems: DetailItem[] = [
+		{ label: tr('detail.plan'), value: stringifyValue(trade.plan_id) },
 		{ label: tr('detail.side'), value: formatSide(trade.side, plugin.settings.language) },
 		{ label: tr('detail.setup'), value: stringifyValue(trade.setup) },
 		{ label: tr('detail.timeframe'), value: stringifyValue(trade.timeframe) },

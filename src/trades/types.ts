@@ -17,6 +17,7 @@ export interface TradeEntry {
 	id?: string;
 	date?: string;
 	journal_type?: TradeJournalType;
+	plan_id?: string;
 	status?: LiveTradeStatus;
 	symbol?: string;
 	side?: TradeSide;

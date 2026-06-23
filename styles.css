@@ -255,6 +255,99 @@
 	margin: 12px 0;
 }
 
+.trader-journal-plan-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	padding: 16px;
+	margin: 12px 0;
+}
+
+.trader-journal-plan-card__header {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	align-items: flex-start;
+	padding-bottom: 12px;
+	margin-bottom: 12px;
+}
+
+.trader-journal-plan-card__title {
+	min-width: 0;
+}
+
+.trader-journal-plan-card__name {
+	font-size: var(--font-ui-large);
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.trader-journal-plan-card__subtitle {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.4;
+	margin-top: 2px;
+	overflow-wrap: anywhere;
+}
+
+.trader-journal-plan-card__header-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-shrink: 0;
+	min-width: 0;
+}
+
+.trader-journal-plan-badge {
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.2;
+	padding: 3px 7px;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
+
+.trader-journal-plan-badge--open {
+	border-color: var(--color-yellow);
+	color: var(--color-yellow);
+}
+
+.trader-journal-plan-badge--closed {
+	border-color: var(--color-purple);
+	color: var(--color-purple);
+}
+
+.trader-journal-plan-badge--cancelled {
+	color: var(--text-muted);
+}
+
+.trader-journal-plan-linked-trades {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+	padding: 10px 12px;
+}
+
+.trader-journal-plan-linked-trades__title {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.trader-journal-plan-linked-trades ul,
+.trader-journal-plan-linked-trades__list {
+	margin: 6px 0 0;
+	padding-left: 18px;
+}
+
 .trader-journal-trade-card__header {
 	display: flex;
 	justify-content: space-between;
@@ -657,6 +750,17 @@ button.trader-journal-trade-card__edit-button svg {
 	background: var(--color-green);
 }
 
+.trader-journal-calendar-dot--plan-open {
+	width: 7px;
+	height: 7px;
+	background: var(--color-yellow);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-yellow) 25%, transparent);
+}
+
+.trader-journal-calendar-dot--plan-ended {
+	background: var(--color-purple);
+}
+
 .trader-journal-horizontal-calendar {
 	display: grid;
 	grid-auto-columns: 46px;
@@ -844,6 +948,20 @@ button.trader-journal-trade-card__edit-button svg {
 	min-width: 0;
 }
 
+.trader-journal-calendar__section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.trader-journal-calendar__section-title {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
 .trader-journal-calendar-card {
 	position: relative;
 	display: grid;
@@ -874,6 +992,18 @@ button.trader-journal-trade-card__edit-button svg {
 
 .trader-journal-calendar-card--short::before {
 	background: var(--color-red);
+}
+
+.trader-journal-calendar-card--plan::before {
+	background: var(--color-yellow);
+}
+
+.trader-journal-calendar-card--plan-closed::before {
+	background: var(--color-purple);
+}
+
+.trader-journal-calendar-card--plan-cancelled::before {
+	background: var(--text-muted);
 }
 
 .trader-journal-calendar-card:hover,
@@ -938,6 +1068,20 @@ button.trader-journal-trade-card__edit-button svg {
 	color: var(--text-muted);
 }
 
+.trader-journal-calendar-card__status--plan-open {
+	border-color: var(--color-yellow);
+	color: var(--color-yellow);
+}
+
+.trader-journal-calendar-card__status--plan-closed {
+	border-color: var(--color-purple);
+	color: var(--color-purple);
+}
+
+.trader-journal-calendar-card__status--plan-cancelled {
+	color: var(--text-muted);
+}
+
 .trader-journal-calendar-card__time,
 .trader-journal-calendar-card__result {
 	justify-self: end;
@@ -945,7 +1089,9 @@ button.trader-journal-trade-card__edit-button svg {
 }
 
 .trader-journal-calendar-card__meta,
-.trader-journal-calendar-card__notes {
+.trader-journal-calendar-card__notes,
+.trader-journal-calendar-card__plan,
+.trader-journal-calendar-card__plan-meta {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -973,6 +1119,28 @@ button.trader-journal-trade-card__edit-button svg {
 
 .trader-journal-calendar-card__notes {
 	padding-top: 1px;
+}
+
+.trader-journal-calendar-card__plan,
+.trader-journal-calendar-card__plan-meta,
+.trader-journal-calendar-card__linked-trades {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+}
+
+.trader-journal-calendar-card__linked-trades {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	padding-top: 2px;
+}
+
+.trader-journal-calendar-card__linked-trades span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 @media (max-width: 520px) {
@@ -1017,7 +1185,15 @@ button.trader-journal-trade-card__edit-button svg {
 		flex-direction: column;
 	}
 
+	.trader-journal-plan-card__header {
+		flex-direction: column;
+	}
+
 	.trader-journal-trade-card__header-meta {
+		justify-content: flex-start;
+	}
+
+	.trader-journal-plan-card__header-meta {
 		justify-content: flex-start;
 	}
 

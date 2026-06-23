@@ -40,6 +40,7 @@ export const KNOWN_TRADE_FIELDS = new Set([
 	'id',
 	'date',
 	'journal_type',
+	'plan_id',
 	'status',
 	'symbol',
 	'side',
