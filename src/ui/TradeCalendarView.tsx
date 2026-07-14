@@ -7,7 +7,11 @@ import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
 import { TradePlanModal } from './TradePlanModal';
 import { TraderJournalModal } from './TraderJournalModal';
-import { CALENDAR_DISPLAY_MODE_CHANGE_EVENT, LANGUAGE_CHANGE_EVENT } from '../settings';
+import {
+	CALENDAR_DISPLAY_MODE_CHANGE_EVENT,
+	ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT,
+	LANGUAGE_CHANGE_EVENT,
+} from '../settings';
 import type { CalendarDisplayMode, TraderJournalLanguage } from '../settings';
 import {
 	formatTradeCount,
@@ -30,6 +34,12 @@ import {
 } from '../plans/planIndex';
 import { formatResult, formatSide, stringifyValue } from '../trades/format';
 import type { TradeJournalType } from '../trades/types';
+import {
+	filterEconomicCalendarEvents,
+	formatEconomicEventTime,
+	groupEconomicEventsByDate,
+} from '../economicCalendar/calendar';
+import type { EconomicCalendarEvent, EconomicImpact } from '../economicCalendar/types';
 
 export const TRADER_JOURNAL_CALENDAR_VIEW_TYPE = 'trader-journal-calendar';
 export const TRADER_JOURNAL_CALENDAR_ICON = 'calendar-clock';
@@ -140,6 +150,11 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		plugin.settings.calendarDisplayMode,
 	);
 	const [language, setLanguage] = useState<TraderJournalLanguage>(plugin.settings.language);
+	const [economicEvents, setEconomicEvents] = useState<EconomicCalendarEvent[]>([]);
+	const [isEconomicCalendarLoading, setIsEconomicCalendarLoading] = useState(false);
+	const [economicCalendarError, setEconomicCalendarError] = useState(false);
+	const [economicSettingsVersion, setEconomicSettingsVersion] = useState(0);
+	const [isEconomicCalendarExpanded, setIsEconomicCalendarExpanded] = useState(false);
 	const [todayScrollRequest, setTodayScrollRequest] = useState(0);
 	const [selectedDateScrollRequest, setSelectedDateScrollRequest] = useState(0);
 	const [monthStartScrollTarget, setMonthStartScrollTarget] = useState<string | null>(null);
@@ -303,11 +318,77 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		};
 	}, []);
 
+	useEffect(() => {
+		const handleEconomicCalendarSettingsChange = () => {
+			setEconomicSettingsVersion((version) => version + 1);
+		};
+
+		window.addEventListener(
+			ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT,
+			handleEconomicCalendarSettingsChange,
+		);
+
+		return () => {
+			window.removeEventListener(
+				ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT,
+				handleEconomicCalendarSettingsChange,
+			);
+		};
+	}, []);
+
+	useEffect(() => {
+		let disposed = false;
+		if (!plugin.settings.economicCalendarEnabled) {
+			setEconomicEvents([]);
+			setEconomicCalendarError(false);
+			setIsEconomicCalendarLoading(false);
+			return;
+		}
+
+		setIsEconomicCalendarLoading(true);
+		setEconomicCalendarError(false);
+		void plugin.economicCalendarService
+			.loadThisWeek()
+			.then((economicSnapshot) => {
+				if (!disposed) {
+					setEconomicEvents(economicSnapshot.events);
+				}
+			})
+			.catch((error: unknown) => {
+				console.error('Trader Journal failed to load economic calendar', error);
+				if (!disposed) {
+					setEconomicEvents([]);
+					setEconomicCalendarError(true);
+				}
+			})
+			.finally(() => {
+				if (!disposed) {
+					setIsEconomicCalendarLoading(false);
+				}
+			});
+
+		return () => {
+			disposed = true;
+		};
+	}, [economicSettingsVersion, plugin]);
+
 	const filteredSnapshot = useMemo(
 		() => filterSnapshotByJournalType(snapshot, journalTypeFilter),
 		[snapshot, journalTypeFilter],
 	);
 	const plansById = useMemo(() => createPlansById(planSnapshot), [planSnapshot]);
+	const economicEventsByDate = useMemo(() => {
+		if (!plugin.settings.economicCalendarEnabled) {
+			return {};
+		}
+
+		const filteredEvents = filterEconomicCalendarEvents(
+			economicEvents,
+			plugin.settings.economicCalendarCountries,
+			plugin.settings.economicCalendarImpacts,
+		);
+		return groupEconomicEventsByDate(filteredEvents, plugin.settings.economicCalendarTimeZone);
+	}, [economicEvents, economicSettingsVersion, plugin]);
 
 	useEffect(() => {
 		if (isLoading) {
@@ -336,6 +417,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		journalTypeFilter === 'live'
 			? planSnapshot.daysByDate[selectedDate] ?? createEmptyPlanDay(selectedDate)
 			: createEmptyPlanDay(selectedDate);
+	const selectedEconomicEvents = economicEventsByDate[selectedDate] ?? [];
 
 	useEffect(() => {
 		if (calendarDisplayMode !== 'horizontal_calendar') {
@@ -489,6 +571,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 						<HorizontalCalendarDateButton
 							calendarDate={calendarDate}
 							day={snapshot.daysByDate[calendarDate.date]}
+							economicNewsCount={economicEventsByDate[calendarDate.date]?.length ?? 0}
 							planDay={planSnapshot.daysByDate[calendarDate.date]}
 							isSelected={calendarDate.date === selectedDate}
 							isToday={calendarDate.date === today}
@@ -513,6 +596,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 							<CalendarDateButton
 								calendarDate={calendarDate}
 								day={snapshot.daysByDate[calendarDate.date]}
+								economicNewsCount={economicEventsByDate[calendarDate.date]?.length ?? 0}
 								planDay={planSnapshot.daysByDate[calendarDate.date]}
 								isSelected={calendarDate.date === selectedDate}
 								isToday={calendarDate.date === today}
@@ -561,6 +645,51 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 					<div className="trader-journal-calendar__empty">{tr('calendar.loadingTrades')}</div>
 				) : (
 					<>
+						{plugin.settings.economicCalendarEnabled ? (
+							<section className="trader-journal-calendar__section">
+								<button
+									type="button"
+									className="trader-journal-calendar__collapsible-title"
+									aria-expanded={isEconomicCalendarExpanded}
+									aria-label={
+										isEconomicCalendarExpanded
+											? tr('calendar.collapseEconomicNews')
+											: tr('calendar.expandEconomicNews')
+									}
+									onClick={() => setIsEconomicCalendarExpanded((expanded) => !expanded)}
+								>
+									<span className="trader-journal-calendar__section-title">
+										{tr('calendar.economicNews')}
+									</span>
+									<span aria-hidden="true">{isEconomicCalendarExpanded ? '⌄' : '›'}</span>
+								</button>
+								{!isEconomicCalendarExpanded ? null : isEconomicCalendarLoading ? (
+									<div className="trader-journal-calendar__empty">
+										{tr('calendar.loadingEconomicNews')}
+									</div>
+								) : economicCalendarError ? (
+									<div className="trader-journal-calendar__empty">
+										{tr('calendar.economicNewsError')}
+									</div>
+								) : selectedEconomicEvents.length > 0 ? (
+									<div className="trader-journal-calendar__trade-list">
+										{selectedEconomicEvents.map((event, index) => (
+											<EconomicCalendarCard
+												event={event}
+												language={language}
+												timeZone={plugin.settings.economicCalendarTimeZone}
+												key={`${event.date}-${event.country}-${event.title}-${index}`}
+											/>
+										))}
+									</div>
+								) : (
+									<div className="trader-journal-calendar__empty">
+										{tr('calendar.noEconomicNews')}
+									</div>
+								)}
+							</section>
+						) : null}
+
 						{journalTypeFilter === 'live' && selectedPlanDay.plans.length > 0 ? (
 							<section className="trader-journal-calendar__section">
 								<div className="trader-journal-calendar__section-title">{tr('calendar.plans')}</div>
@@ -658,6 +787,7 @@ function CalendarIconButton({
 function CalendarDateButton({
 	calendarDate,
 	day,
+	economicNewsCount,
 	planDay,
 	isSelected,
 	isToday,
@@ -666,6 +796,7 @@ function CalendarDateButton({
 }: {
 	calendarDate: CalendarDateCell;
 	day: JournalCalendarDay | undefined;
+	economicNewsCount: number;
 	planDay: JournalCalendarPlanDay | undefined;
 	isSelected: boolean;
 	isToday: boolean;
@@ -683,6 +814,9 @@ function CalendarDateButton({
 	if (planDay && getPlanCount(planDay) > 0) {
 		labelParts.push(`${getPlanCount(planDay)} ${tr('calendar.plans').toLowerCase()}`);
 	}
+	if (economicNewsCount > 0) {
+		labelParts.push(tr('calendar.economicNewsCount', { count: economicNewsCount }));
+	}
 
 	return (
 		<button
@@ -699,7 +833,7 @@ function CalendarDateButton({
 			data-date={calendarDate.date}
 			onClick={() => onSelect(calendarDate.date)}
 		>
-			<CalendarDotSummary day={day} planDay={planDay} />
+			<CalendarDotSummary day={day} planDay={planDay} hasEconomicNews={economicNewsCount > 0} />
 			<span className="trader-journal-calendar-day__number">{calendarDate.dayNumber}</span>
 		</button>
 	);
@@ -708,6 +842,7 @@ function CalendarDateButton({
 function HorizontalCalendarDateButton({
 	calendarDate,
 	day,
+	economicNewsCount,
 	planDay,
 	isSelected,
 	isToday,
@@ -716,6 +851,7 @@ function HorizontalCalendarDateButton({
 }: {
 	calendarDate: CalendarDateCell;
 	day: JournalCalendarDay | undefined;
+	economicNewsCount: number;
 	planDay: JournalCalendarPlanDay | undefined;
 	isSelected: boolean;
 	isToday: boolean;
@@ -738,6 +874,9 @@ function HorizontalCalendarDateButton({
 	if (planDay && getPlanCount(planDay) > 0) {
 		labelParts.push(`${getPlanCount(planDay)} ${tr('calendar.plans').toLowerCase()}`);
 	}
+	if (economicNewsCount > 0) {
+		labelParts.push(tr('calendar.economicNewsCount', { count: economicNewsCount }));
+	}
 
 	return (
 		<button
@@ -753,7 +892,7 @@ function HorizontalCalendarDateButton({
 			data-date={calendarDate.date}
 			onClick={() => onSelect(calendarDate.date)}
 		>
-			<CalendarDotSummary day={day} planDay={planDay} />
+			<CalendarDotSummary day={day} planDay={planDay} hasEconomicNews={economicNewsCount > 0} />
 			<span className="trader-journal-horizontal-calendar-day__weekday">{weekdayLabel}</span>
 			<span className="trader-journal-horizontal-calendar-day__number">{calendarDate.dayNumber}</span>
 		</button>
@@ -762,9 +901,11 @@ function HorizontalCalendarDateButton({
 
 function CalendarDotSummary({
 	day,
+	hasEconomicNews,
 	planDay,
 }: {
 	day: JournalCalendarDay | undefined;
+	hasEconomicNews: boolean;
 	planDay: JournalCalendarPlanDay | undefined;
 }) {
 	return (
@@ -781,6 +922,58 @@ function CalendarDotSummary({
 			{planDay && planDay.closedPlanCount + planDay.cancelledPlanCount > 0 ? (
 				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--plan-ended" />
 			) : null}
+			{hasEconomicNews ? (
+				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--economic-news" />
+			) : null}
+		</div>
+	);
+}
+
+const ECONOMIC_IMPACT_TRANSLATION_KEYS: Record<
+	EconomicImpact,
+	'impact.high' | 'impact.medium' | 'impact.low' | 'impact.holiday'
+> = {
+	High: 'impact.high',
+	Medium: 'impact.medium',
+	Low: 'impact.low',
+	Holiday: 'impact.holiday',
+};
+
+function EconomicCalendarCard({
+	event,
+	language,
+	timeZone,
+}: {
+	event: EconomicCalendarEvent;
+	language: TraderJournalLanguage;
+	timeZone: string;
+}) {
+	const tr = getTranslator(language);
+	const locale = getLocale(language);
+	const forecast = event.forecast || tr('calendar.notAvailable');
+	const previous = event.previous || tr('calendar.notAvailable');
+
+	return (
+		<div
+			className={[
+				'trader-journal-economic-card',
+				`trader-journal-economic-card--${event.impact.toLowerCase()}`,
+			].join(' ')}
+		>
+			<div className="trader-journal-economic-card__head">
+				<strong className="trader-journal-economic-card__country">{event.country}</strong>
+				<span className="trader-journal-economic-card__time">
+					{formatEconomicEventTime(event, timeZone, locale)}
+				</span>
+			</div>
+			<div className="trader-journal-economic-card__title">{event.title}</div>
+			<div className="trader-journal-economic-card__meta">
+				<span className="trader-journal-economic-card__impact">
+					{tr(ECONOMIC_IMPACT_TRANSLATION_KEYS[event.impact])}
+				</span>
+				<span>{tr('calendar.forecast', { value: forecast })}</span>
+				<span>{tr('calendar.previous', { value: previous })}</span>
+			</div>
 		</div>
 	);
 }

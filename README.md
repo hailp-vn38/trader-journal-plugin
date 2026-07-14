@@ -7,6 +7,7 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 - Add backtest trades from an Obsidian modal.
 - Add live trades from a separate modal flow.
 - Open a sidebar calendar with separate backtest and live dots per journal date.
+- Show this week's economic events alongside trades, filtered by country/currency and impact.
 - Edit live trades from the sidebar calendar.
 - Store one file per symbol per day.
 - Configure journal folder, symbols, and timeframes in settings.
@@ -106,12 +107,23 @@ Backtest daily note properties include `backtest_start_date` and `backtest_end_d
 - **Timeframes**: Timeframes shown in the trade modal.
 - **Calendar display**: Chooses the month grid or horizontal calendar layout in the sidebar.
 - **Remote images**: Allows image previews from external URLs. This is disabled by default.
+- **Economic calendar**: Enables loading this week's events from Faireconomy. This is disabled by default.
+- **Economic calendar time zone**: Controls how economic event dates and times are displayed. Defaults to `Asia/Ho_Chi_Minh`.
+- **Countries and currencies**: Only matching event codes such as `USD`, `EUR`, or `GBP` are shown.
+- **News impact**: Chooses which `High`, `Medium`, `Low`, and `Holiday` events are shown.
 
 ## Privacy
 
 Trader Journal works locally by default. Pasted images are saved inside the vault under `_attachments`; if you close the trade modal without saving, temporary pasted images are moved to trash.
 
 Remote image previews are disabled by default. If you enable **Remote images**, opening notes with external image URLs may send requests to those image hosts.
+
+The economic calendar is disabled by default. If you enable it, the plugin requests
+`https://nfs.faireconomy.media/ff_calendar_thisweek.json`. The request does not include vault content,
+filenames, account information, or telemetry. A successful response is stored in the plugin's `data.json`
+for the source calendar week. The plugin only requests the endpoint when there is no cached response for
+the current source week; changing filters or the display time zone does not trigger another request. Failed
+requests are subject to a persisted five-minute cooldown before another attempt can be made.
 
 ## Development
 

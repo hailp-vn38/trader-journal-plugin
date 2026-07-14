@@ -13,6 +13,7 @@ import {
 } from '../settings';
 import type { CalendarDisplayMode, TraderJournalLanguage } from '../settings';
 import { getTranslator } from '../i18n';
+import { EconomicCalendarSettings } from './settings/EconomicCalendarSettings';
 
 interface SettingsViewProps {
 	plugin: TraderJournalPlugin;
@@ -215,6 +216,8 @@ function SettingsView({ plugin }: SettingsViewProps) {
 					<option value="horizontal_calendar">{tr('option.horizontalCalendar')}</option>
 				</select>
 			</label>
+
+			<EconomicCalendarSettings language={language} plugin={plugin} />
 
 			<section className="trader-journal-setting trader-journal-setting--list">
 				<div>

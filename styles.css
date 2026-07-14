@@ -87,6 +87,25 @@
 	overflow-wrap: anywhere;
 }
 
+.trader-journal-setting__checkbox-list {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 14px;
+	min-width: 0;
+}
+
+.trader-journal-setting__checkbox-list label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.trader-journal-setting__checkbox-list input {
+	width: auto;
+}
+
 .trader-journal-add-row {
 	display: flex;
 	gap: 8px;
@@ -761,6 +780,10 @@ button.trader-journal-trade-card__edit-button svg {
 	background: var(--color-purple);
 }
 
+.trader-journal-calendar-dot--economic-news {
+	background: var(--color-orange);
+}
+
 .trader-journal-horizontal-calendar {
 	display: grid;
 	grid-auto-columns: 46px;
@@ -960,6 +983,109 @@ button.trader-journal-trade-card__edit-button svg {
 	font-size: var(--font-ui-smaller);
 	font-weight: 700;
 	text-transform: uppercase;
+}
+
+.trader-journal-calendar button.trader-journal-calendar__collapsible-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	min-height: 28px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	padding: 4px 0;
+	text-align: left;
+}
+
+.trader-journal-calendar button.trader-journal-calendar__collapsible-title:hover,
+.trader-journal-calendar button.trader-journal-calendar__collapsible-title:focus-visible {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.trader-journal-economic-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	padding: 8px 9px 8px 11px;
+	overflow: hidden;
+}
+
+.trader-journal-economic-card::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 3px;
+	background: var(--text-muted);
+}
+
+.trader-journal-economic-card--high::before {
+	background: var(--color-red);
+}
+
+.trader-journal-economic-card--medium::before {
+	background: var(--color-orange);
+}
+
+.trader-journal-economic-card--low::before {
+	background: var(--color-yellow);
+}
+
+.trader-journal-economic-card--holiday::before {
+	background: var(--color-blue);
+}
+
+.trader-journal-economic-card__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.trader-journal-economic-card__country,
+.trader-journal-economic-card__title {
+	color: var(--text-normal);
+}
+
+.trader-journal-economic-card__country {
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-economic-card__title {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.trader-journal-economic-card__time,
+.trader-journal-economic-card__meta {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-economic-card__time {
+	white-space: nowrap;
+}
+
+.trader-journal-economic-card__meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+}
+
+.trader-journal-economic-card__impact {
+	font-weight: 700;
 }
 
 .trader-journal-calendar-card {
@@ -1164,6 +1290,11 @@ button.trader-journal-trade-card__edit-button svg {
 	}
 
 	.trader-journal-toggle {
+		grid-column: 1;
+		grid-row: auto;
+	}
+
+	.trader-journal-setting__checkbox-list {
 		grid-column: 1;
 		grid-row: auto;
 	}
