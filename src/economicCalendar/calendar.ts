@@ -5,12 +5,16 @@ export function filterEconomicCalendarEvents(
 	events: EconomicCalendarEvent[],
 	countries: string[],
 	impacts: EconomicImpact[],
+	now: number,
 ): EconomicCalendarEvent[] {
 	const allowedCountries = new Set(countries.map((country) => country.toUpperCase()));
 	const allowedImpacts = new Set(impacts);
 
 	return events.filter(
-		(event) => allowedCountries.has(event.country) && allowedImpacts.has(event.impact),
+		(event) =>
+			Date.parse(event.date) > now &&
+			allowedCountries.has(event.country) &&
+			allowedImpacts.has(event.impact),
 	);
 }
 

@@ -155,6 +155,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const [economicCalendarError, setEconomicCalendarError] = useState(false);
 	const [economicSettingsVersion, setEconomicSettingsVersion] = useState(0);
 	const [isEconomicCalendarExpanded, setIsEconomicCalendarExpanded] = useState(false);
+	const [economicCalendarNow, setEconomicCalendarNow] = useState(() => Date.now());
 	const [todayScrollRequest, setTodayScrollRequest] = useState(0);
 	const [selectedDateScrollRequest, setSelectedDateScrollRequest] = useState(0);
 	const [monthStartScrollTarget, setMonthStartScrollTarget] = useState<string | null>(null);
@@ -386,9 +387,10 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 			economicEvents,
 			plugin.settings.economicCalendarCountries,
 			plugin.settings.economicCalendarImpacts,
+			economicCalendarNow,
 		);
 		return groupEconomicEventsByDate(filteredEvents, plugin.settings.economicCalendarTimeZone);
-	}, [economicEvents, economicSettingsVersion, plugin]);
+	}, [economicCalendarNow, economicEvents, economicSettingsVersion, plugin]);
 
 	useEffect(() => {
 		if (isLoading) {
@@ -515,6 +517,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 
 	const goToToday = () => {
 		const nextToday = formatDateKey(new Date());
+		setEconomicCalendarNow(Date.now());
 		setMonthStartScrollTarget(null);
 		setToday(nextToday);
 		setSelectedDate(nextToday);
