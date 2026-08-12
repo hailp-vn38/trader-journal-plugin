@@ -574,9 +574,11 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 					{horizontalCalendarDates.map((calendarDate) => (
 						<HorizontalCalendarDateButton
 							calendarDate={calendarDate}
-							day={snapshot.daysByDate[calendarDate.date]}
+							day={filteredSnapshot.daysByDate[calendarDate.date]}
 							economicNewsCount={economicEventsByDate[calendarDate.date]?.length ?? 0}
-							planDay={planSnapshot.daysByDate[calendarDate.date]}
+							planDay={
+								journalTypeFilter === 'live' ? planSnapshot.daysByDate[calendarDate.date] : undefined
+							}
 							isSelected={calendarDate.date === selectedDate}
 							isToday={calendarDate.date === today}
 							key={calendarDate.date}
@@ -599,9 +601,11 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 						{calendarDates.map((calendarDate) => (
 							<CalendarDateButton
 								calendarDate={calendarDate}
-								day={snapshot.daysByDate[calendarDate.date]}
+								day={filteredSnapshot.daysByDate[calendarDate.date]}
 								economicNewsCount={economicEventsByDate[calendarDate.date]?.length ?? 0}
-								planDay={planSnapshot.daysByDate[calendarDate.date]}
+								planDay={
+									journalTypeFilter === 'live' ? planSnapshot.daysByDate[calendarDate.date] : undefined
+								}
 								isSelected={calendarDate.date === selectedDate}
 								isToday={calendarDate.date === today}
 								key={calendarDate.date}
@@ -834,11 +838,12 @@ function CalendarDateButton({
 				.filter(Boolean)
 				.join(' ')}
 			aria-label={labelParts.join(', ')}
+			title={labelParts.join(', ')}
 			data-date={calendarDate.date}
 			onClick={() => onSelect(calendarDate.date)}
 		>
-			<CalendarDotSummary day={day} planDay={planDay} hasEconomicNews={economicNewsCount > 0} />
 			<span className="trader-journal-calendar-day__number">{calendarDate.dayNumber}</span>
+			<CalendarDotSummary day={day} planDay={planDay} hasEconomicNews={economicNewsCount > 0} />
 		</button>
 	);
 }
@@ -893,12 +898,13 @@ function HorizontalCalendarDateButton({
 				.filter(Boolean)
 				.join(' ')}
 			aria-label={labelParts.join(', ')}
+			title={labelParts.join(', ')}
 			data-date={calendarDate.date}
 			onClick={() => onSelect(calendarDate.date)}
 		>
-			<CalendarDotSummary day={day} planDay={planDay} hasEconomicNews={economicNewsCount > 0} />
 			<span className="trader-journal-horizontal-calendar-day__weekday">{weekdayLabel}</span>
 			<span className="trader-journal-horizontal-calendar-day__number">{calendarDate.dayNumber}</span>
+			<CalendarDotSummary day={day} planDay={planDay} hasEconomicNews={economicNewsCount > 0} />
 		</button>
 	);
 }
@@ -920,11 +926,8 @@ function CalendarDotSummary({
 			{day?.liveCount ? (
 				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--live" />
 			) : null}
-			{planDay?.openPlanCount ? (
-				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--plan-open" />
-			) : null}
-			{planDay && planDay.closedPlanCount + planDay.cancelledPlanCount > 0 ? (
-				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--plan-ended" />
+			{planDay && getPlanCount(planDay) > 0 ? (
+				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--plan" />
 			) : null}
 			{hasEconomicNews ? (
 				<span className="trader-journal-calendar-dot trader-journal-calendar-dot--economic-news" />

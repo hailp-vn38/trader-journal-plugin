@@ -783,7 +783,7 @@ button.trader-journal-trade-detail__link:focus-visible {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 3px;
+	gap: 2px;
 	aspect-ratio: 1 / 1;
 	min-width: 0;
 	min-height: 34px;
@@ -827,7 +827,7 @@ button.trader-journal-trade-detail__link:focus-visible {
 	align-items: center;
 	justify-content: center;
 	gap: 3px;
-	min-height: 6px;
+	min-height: 7px;
 }
 
 .trader-journal-calendar-dot {
@@ -845,18 +845,16 @@ button.trader-journal-trade-detail__link:focus-visible {
 	background: var(--color-green);
 }
 
-.trader-journal-calendar-dot--plan-open {
+.trader-journal-calendar-dot--plan {
 	width: 7px;
 	height: 7px;
-	background: var(--color-yellow);
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-yellow) 25%, transparent);
-}
-
-.trader-journal-calendar-dot--plan-ended {
-	background: var(--color-purple);
+	border: 1.5px solid var(--color-yellow);
+	background: transparent;
 }
 
 .trader-journal-calendar-dot--economic-news {
+	width: 4px;
+	height: 4px;
 	background: var(--color-orange);
 }
 
@@ -879,7 +877,7 @@ button.trader-journal-trade-detail__link:focus-visible {
 
 .trader-journal-calendar button.trader-journal-horizontal-calendar-day {
 	display: grid;
-	grid-template-rows: 8px auto auto;
+	grid-template-rows: auto auto 8px;
 	align-items: center;
 	justify-items: center;
 	gap: 2px;
