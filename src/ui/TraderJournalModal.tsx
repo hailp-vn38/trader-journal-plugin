@@ -934,8 +934,7 @@ function cleanupCreatedAttachments(plugin: TraderJournalPlugin, attachmentPaths:
 async function deleteCreatedAttachment(plugin: TraderJournalPlugin, attachmentPath: string): Promise<void> {
 	const abstractFile = plugin.app.vault.getAbstractFileByPath(attachmentPath);
 	if (abstractFile instanceof TFile) {
-		// eslint-disable-next-line obsidianmd/prefer-file-manager-trash-file -- FileManager.trashFile requires Obsidian 1.6.6; this plugin supports 1.4.4.
-		await plugin.app.vault.trash(abstractFile, true);
+		await plugin.app.fileManager.trashFile(abstractFile);
 	}
 }
 

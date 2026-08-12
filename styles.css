@@ -34,6 +34,12 @@
 	gap: 16px;
 }
 
+.trader-journal-settings-definition {
+	display: block;
+	border: 0;
+	padding: 0;
+}
+
 .trader-journal-setting {
 	display: grid;
 	grid-template-columns: minmax(160px, 1fr) minmax(220px, 2fr);
@@ -866,12 +872,6 @@ button.trader-journal-trade-detail__link:focus-visible {
 	overflow-x: auto;
 	overflow-y: hidden;
 	padding: 2px 0 6px;
-	scrollbar-width: none;
-	-ms-overflow-style: none;
-}
-
-.trader-journal-horizontal-calendar::-webkit-scrollbar {
-	display: none;
 }
 
 .trader-journal-calendar button.trader-journal-horizontal-calendar-day {

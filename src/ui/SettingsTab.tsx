@@ -1,4 +1,4 @@
-import type { App } from 'obsidian';
+import type { App, SettingDefinitionItem } from 'obsidian';
 import { PluginSettingTab } from 'obsidian';
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -325,6 +325,50 @@ export class TraderJournalSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: TraderJournalPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const tr = getTranslator(this.plugin.settings.language);
+		return [
+			{
+				name: 'Trader Journal',
+				desc: 'Configure journal folders, trade display, economic events, symbols, and timeframes.',
+				aliases: [
+					tr('settings.languageLabel'),
+					tr('settings.backtestFolderLabel'),
+					tr('settings.liveFolderLabel'),
+					tr('settings.planFolderLabel'),
+					tr('settings.remoteImagesLabel'),
+					tr('settings.imageModalLabel'),
+					tr('settings.calendarDisplayLabel'),
+					tr('settings.economicCalendarLabel'),
+					tr('settings.symbolsLabel'),
+					tr('settings.timeframesLabel'),
+				],
+				render: (setting) => {
+					this.root?.unmount();
+					setting.setClass('trader-journal-settings-definition');
+					setting.settingEl.empty();
+					const mountEl = setting.settingEl.createDiv({
+						cls: 'trader-journal-settings-root',
+					});
+					const root = createRoot(mountEl);
+					this.root = root;
+					root.render(
+						<StrictMode>
+							<SettingsView plugin={this.plugin} />
+						</StrictMode>,
+					);
+
+					return () => {
+						root.unmount();
+						if (this.root === root) {
+							this.root = null;
+						}
+					};
+				},
+			},
+		];
 	}
 
 	display(): void {
