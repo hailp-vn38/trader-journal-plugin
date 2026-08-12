@@ -10,6 +10,8 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 	const tr = getTranslator(plugin.settings.language);
 
 	plugin.addCommand({
+		// Keep the published ID so existing command links and hotkey assignments continue to work.
+		// eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id
 		id: 'open-trader-journal',
 		name: tr('command.addBacktestTrade'),
 		callback: () => {

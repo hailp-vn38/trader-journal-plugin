@@ -6,9 +6,9 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 
 - Add backtest trades from an Obsidian modal.
 - Add live trades from a separate modal flow.
-- Open a sidebar calendar with separate backtest and live dots per journal date.
+- Open a sidebar calendar with filter-specific trade, plan, and economic-event indicators.
 - Show this week's economic events alongside trades, filtered by country/currency and impact.
-- Edit live trades from the sidebar calendar.
+- Edit live trades from the sidebar calendar or rendered Markdown cards.
 - Store one file per symbol per day.
 - Configure journal folder, symbols, and timeframes in settings.
 - Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
@@ -116,7 +116,7 @@ Backtest daily note properties include `backtest_start_date` and `backtest_end_d
 
 ## Privacy
 
-Trader Journal works locally by default. Pasted images are saved inside the vault under `_attachments`; if you close the trade modal without saving, temporary pasted images are moved to trash.
+Trader Journal works locally by default and does not collect analytics or telemetry. Pasted images are saved inside the vault under `_attachments`; if you close the trade modal without saving, temporary pasted images are moved to trash.
 
 Remote image previews are disabled by default. If you enable **Remote images**, opening notes with external image URLs may send requests to those image hosts.
 
@@ -161,4 +161,4 @@ For an Obsidian plugin release, attach these files:
 - `main.js`
 - `styles.css`
 
-The plugin ID is `trader-journal-plugin`.
+The plugin ID is `trader-journal`. For local installation, place the release files in `.obsidian/plugins/trader-journal/`.

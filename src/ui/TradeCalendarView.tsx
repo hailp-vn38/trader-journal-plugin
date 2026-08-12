@@ -1,4 +1,4 @@
-import type { EventRef, TAbstractFile, WorkspaceLeaf } from 'obsidian';
+import type { EventRef, Events, TAbstractFile, WorkspaceLeaf } from 'obsidian';
 import { ItemView, MarkdownView, Notice, setIcon, TFile } from 'obsidian';
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -290,52 +290,50 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	}, []);
 
 	useEffect(() => {
-		const handleCalendarDisplayModeChange = (event: Event) => {
-			const nextMode = (event as CustomEvent<CalendarDisplayMode>).detail;
+		const handleCalendarDisplayModeChange = (nextMode: unknown) => {
 			if (nextMode === 'month' || nextMode === 'horizontal_calendar') {
 				setCalendarDisplayMode(nextMode);
 			}
 		};
 
-		window.addEventListener(CALENDAR_DISPLAY_MODE_CHANGE_EVENT, handleCalendarDisplayModeChange);
+		const eventRef = (plugin.app.workspace as Events).on(
+			CALENDAR_DISPLAY_MODE_CHANGE_EVENT,
+			handleCalendarDisplayModeChange,
+		);
 
 		return () => {
-			window.removeEventListener(CALENDAR_DISPLAY_MODE_CHANGE_EVENT, handleCalendarDisplayModeChange);
+			plugin.app.workspace.offref(eventRef);
 		};
-	}, []);
+	}, [plugin]);
 
 	useEffect(() => {
-		const handleLanguageChange = (event: Event) => {
-			const nextLanguage = (event as CustomEvent<TraderJournalLanguage>).detail;
+		const handleLanguageChange = (nextLanguage: unknown) => {
 			if (nextLanguage === 'en' || nextLanguage === 'vi') {
 				setLanguage(nextLanguage);
 			}
 		};
 
-		window.addEventListener(LANGUAGE_CHANGE_EVENT, handleLanguageChange);
+		const eventRef = (plugin.app.workspace as Events).on(LANGUAGE_CHANGE_EVENT, handleLanguageChange);
 
 		return () => {
-			window.removeEventListener(LANGUAGE_CHANGE_EVENT, handleLanguageChange);
+			plugin.app.workspace.offref(eventRef);
 		};
-	}, []);
+	}, [plugin]);
 
 	useEffect(() => {
-		const handleEconomicCalendarSettingsChange = () => {
+		const handleEconomicCalendarSettingsChange = (..._data: unknown[]) => {
 			setEconomicSettingsVersion((version) => version + 1);
 		};
 
-		window.addEventListener(
+		const eventRef = (plugin.app.workspace as Events).on(
 			ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT,
 			handleEconomicCalendarSettingsChange,
 		);
 
 		return () => {
-			window.removeEventListener(
-				ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT,
-				handleEconomicCalendarSettingsChange,
-			);
+			plugin.app.workspace.offref(eventRef);
 		};
-	}, []);
+	}, [plugin]);
 
 	useEffect(() => {
 		let disposed = false;

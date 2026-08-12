@@ -1,5 +1,5 @@
 import { MarkdownRenderChild } from 'obsidian';
-import type { MarkdownPostProcessorContext } from 'obsidian';
+import type { Events, MarkdownPostProcessorContext } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { IMAGE_MODAL_SETTING_CHANGE_EVENT } from '../settings';
 
@@ -44,7 +44,10 @@ export function registerImageModalInteraction(
 		event.preventDefault();
 		openModal();
 	});
-	window.addEventListener(IMAGE_MODAL_SETTING_CHANGE_EVENT, applySetting);
-	child.register(() => window.removeEventListener(IMAGE_MODAL_SETTING_CHANGE_EVENT, applySetting));
+	const eventRef = (plugin.app.workspace as Events).on(
+		IMAGE_MODAL_SETTING_CHANGE_EVENT,
+		(..._data: unknown[]) => applySetting(),
+	);
+	child.register(() => plugin.app.workspace.offref(eventRef));
 	ctx.addChild(child);
 }

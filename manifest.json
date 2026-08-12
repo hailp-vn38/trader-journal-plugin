@@ -1,8 +1,10 @@
 {
-	"id": "trader-journal-plugin",
+	"id": "trader-journal",
 	"name": "Trader Journal",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"minAppVersion": "1.4.4",
-	"description": "Backtest trading journal with daily notes per symbol.",
+	"description": "Record backtest and live trades with plans, statistics, images, and an economic calendar.",
+	"author": "LamPhucHai",
+	"authorUrl": "https://github.com/hailp-vn38",
 	"isDesktopOnly": false
 }

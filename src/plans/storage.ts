@@ -330,7 +330,7 @@ async function readTradePlanEntries(plugin: TraderJournalPlugin): Promise<TradeP
 
 async function readTradePlanEntry(plugin: TraderJournalPlugin, file: TFile): Promise<TradePlanFileEntry | null> {
 	try {
-		const content = await plugin.app.vault.read(file);
+		const content = await plugin.app.vault.cachedRead(file);
 		if (!hasPlanBlocks(content)) {
 			return null;
 		}

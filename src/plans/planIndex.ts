@@ -141,7 +141,7 @@ export class JournalPlanIndex {
 
 	private async readFileEntry(file: TFile): Promise<JournalPlanFileEntry | null> {
 		try {
-			const content = await this.plugin.app.vault.read(file);
+			const content = await this.plugin.app.vault.cachedRead(file);
 			const { body } = splitFrontmatter(content);
 			const plans = extractPlans(body);
 			if (plans.length === 0) {

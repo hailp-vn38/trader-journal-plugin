@@ -148,7 +148,7 @@ export class JournalCalendarIndex {
 
 	private async readFileEntry(file: TFile): Promise<JournalCalendarFileEntry | null> {
 		try {
-			const content = await this.plugin.app.vault.read(file);
+			const content = await this.plugin.app.vault.cachedRead(file);
 			if (!hasTradeBlocks(content)) {
 				return null;
 			}

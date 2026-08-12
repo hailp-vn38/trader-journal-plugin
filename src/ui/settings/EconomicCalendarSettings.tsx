@@ -66,21 +66,21 @@ export function EconomicCalendarSettings({
 		setEnabled(value);
 		plugin.settings.economicCalendarEnabled = value;
 		void plugin.saveSettings();
-		notifySettingsChange();
+		notifySettingsChange(plugin);
 	};
 
 	const saveTimeZone = (value: string) => {
 		setTimeZone(value);
 		plugin.settings.economicCalendarTimeZone = value;
 		void plugin.saveSettings();
-		notifySettingsChange();
+		notifySettingsChange(plugin);
 	};
 
 	const saveShowAll = (value: boolean) => {
 		setShowAll(value);
 		plugin.settings.economicCalendarShowAll = value;
 		void plugin.saveSettings();
-		notifySettingsChange();
+		notifySettingsChange(plugin);
 	};
 
 	const saveCountries = (nextCountries: string[]) => {
@@ -91,7 +91,7 @@ export function EconomicCalendarSettings({
 		setCountries(nextCountries);
 		plugin.settings.economicCalendarCountries = nextCountries;
 		void plugin.saveSettings();
-		notifySettingsChange();
+		notifySettingsChange(plugin);
 	};
 
 	const addCountry = () => {
@@ -124,7 +124,7 @@ export function EconomicCalendarSettings({
 		setImpacts(nextImpacts);
 		plugin.settings.economicCalendarImpacts = nextImpacts;
 		void plugin.saveSettings();
-		notifySettingsChange();
+		notifySettingsChange(plugin);
 	};
 
 	const handleAddKey = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -260,6 +260,6 @@ export function EconomicCalendarSettings({
 	);
 }
 
-function notifySettingsChange(): void {
-	window.dispatchEvent(new CustomEvent(ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT));
+function notifySettingsChange(plugin: TraderJournalPlugin): void {
+	plugin.app.workspace.trigger(ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT);
 }

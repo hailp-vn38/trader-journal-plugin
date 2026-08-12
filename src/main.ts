@@ -36,18 +36,13 @@ export default class TraderJournalPlugin extends Plugin {
 			void openTraderJournalCalendar(this);
 		});
 
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Trader journal');
-
 		registerTraderJournalCalendarView(this);
 		registerCommands(this);
-		registerAutoStatsRebuild(this);
+		this.app.workspace.onLayoutReady(() => registerAutoStatsRebuild(this));
 		registerTradeBlockProcessor(this);
 		registerPlanBlockProcessor(this);
 		this.addSettingTab(new TraderJournalSettingTab(this.app, this));
 	}
-
-	onunload() {}
 
 	async loadSettings() {
 		const data = (await this.loadData()) as unknown;

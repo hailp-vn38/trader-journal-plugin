@@ -38,7 +38,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 		setLanguage(value);
 		plugin.settings.language = value;
 		void plugin.saveSettings();
-		window.dispatchEvent(new CustomEvent(LANGUAGE_CHANGE_EVENT, { detail: value }));
+		plugin.app.workspace.trigger(LANGUAGE_CHANGE_EVENT, value);
 	};
 
 	const saveJournalFolder = (value: string) => {
@@ -89,14 +89,14 @@ function SettingsView({ plugin }: SettingsViewProps) {
 		setOpenImageModalOnClick(value);
 		plugin.settings.openImageModalOnClick = value;
 		void plugin.saveSettings();
-		window.dispatchEvent(new CustomEvent(IMAGE_MODAL_SETTING_CHANGE_EVENT));
+		plugin.app.workspace.trigger(IMAGE_MODAL_SETTING_CHANGE_EVENT);
 	};
 
 	const saveCalendarDisplayMode = (value: CalendarDisplayMode) => {
 		setCalendarDisplayMode(value);
 		plugin.settings.calendarDisplayMode = value;
 		void plugin.saveSettings();
-		window.dispatchEvent(new CustomEvent(CALENDAR_DISPLAY_MODE_CHANGE_EVENT, { detail: value }));
+		plugin.app.workspace.trigger(CALENDAR_DISPLAY_MODE_CHANGE_EVENT, value);
 	};
 
 	const addSymbol = () => {
@@ -148,8 +148,6 @@ function SettingsView({ plugin }: SettingsViewProps) {
 
 	return (
 		<div className="trader-journal-settings">
-			<h2>{tr('settings.title')}</h2>
-
 			<label className="trader-journal-setting">
 				<span className="trader-journal-setting__label">{tr('settings.languageLabel')}</span>
 				<span className="trader-journal-setting__description">{tr('settings.languageDescription')}</span>

@@ -24,6 +24,7 @@ jobs:
             - name: Build plugin
               run: |
                   npm ci
+                  npm run validate
                   npm run build
                   npm run lint
 
