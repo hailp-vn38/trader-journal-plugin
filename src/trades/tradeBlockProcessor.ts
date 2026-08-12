@@ -1,4 +1,4 @@
-import { MarkdownRenderChild, Modal, normalizePath, setIcon, TFile } from 'obsidian';
+import { MarkdownRenderChild, Modal, normalizePath, Notice, setIcon, TFile } from 'obsidian';
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
@@ -19,10 +19,15 @@ import {
 } from './format';
 import { TRADE_CODE_BLOCK_LANGUAGE } from './types';
 import type { NormalizedTradeImage, TradeEntry, TradeJournalType } from './types';
+import { registerImageModalInteraction } from '../ui/imageModalInteraction';
+import { getTradePlanById } from '../plans/storage';
 
 interface DetailItem {
 	label: string;
 	value: string;
+	modifierClass?: string;
+	onSelect?: () => void;
+	selectLabel?: string;
 }
 
 export function registerTradeBlockProcessor(plugin: TraderJournalPlugin): void {
@@ -50,7 +55,7 @@ function renderTradeBlock(
 
 	const cardEl = el.createDiv({ cls: 'trader-journal-trade-card' });
 	renderHeader(plugin, cardEl, trade, ctx);
-	renderDetails(plugin, cardEl, trade);
+	renderDetails(plugin, cardEl, trade, ctx);
 	renderTags(cardEl, trade);
 	renderImages(plugin, cardEl, trade, ctx);
 	renderNotes(plugin, cardEl, trade);
@@ -110,7 +115,7 @@ function renderEditButton(
 	trade: TradeEntry,
 	ctx: MarkdownPostProcessorContext,
 ): void {
-	if (!stringifyValue(trade.id) || !canEditTrade(plugin, trade, ctx.sourcePath)) {
+	if (!stringifyValue(trade.id)) {
 		return;
 	}
 
@@ -140,32 +145,71 @@ function renderEditButton(
 	ctx.addChild(child);
 }
 
-function canEditTrade(plugin: TraderJournalPlugin, trade: TradeEntry, sourcePath: string): boolean {
-	return getTradeJournalType(plugin, trade, sourcePath) !== 'live' || getLiveTradeStatus(trade) !== 'closed';
-}
-
-function getLiveTradeStatus(trade: TradeEntry): 'open' | 'closed' {
-	if (trade.status === 'open' || trade.status === 'closed') {
-		return trade.status;
-	}
-
-	return stringifyValue(trade.closed_at) ? 'closed' : 'open';
-}
-
-function renderDetails(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: TradeEntry): void {
+function renderDetails(
+	plugin: TraderJournalPlugin,
+	parentEl: HTMLElement,
+	trade: TradeEntry,
+	ctx: MarkdownPostProcessorContext,
+): void {
 	const holdingTime = formatDuration(getHoldingMinutes(trade));
 	const tr = getTranslator(plugin.settings.language);
+	const isLiveTrade = getTradeJournalType(plugin, trade, ctx.sourcePath) === 'live';
+	const status = stringifyValue(trade.closed_at) ? 'closed' : 'open';
+	const planId = stringifyValue(trade.plan_id);
 	const detailItems: DetailItem[] = [
-		{ label: tr('detail.plan'), value: stringifyValue(trade.plan_id) },
-		{ label: tr('detail.side'), value: formatSide(trade.side, plugin.settings.language) },
+		{
+			label: tr('detail.plan'),
+			value: planId,
+			modifierClass: isLiveTrade ? 'trader-journal-trade-detail--plan' : undefined,
+			onSelect: isLiveTrade && planId ? () => void openLinkedPlan(plugin, planId, ctx.sourcePath) : undefined,
+			selectLabel: planId ? tr('plan.openLinked', { plan: planId }) : undefined,
+		},
+		...(isLiveTrade
+			? [{
+				label: tr('detail.status'),
+				value: tr(status === 'closed' ? 'option.closed' : 'option.open'),
+				modifierClass: `trader-journal-trade-detail--status-${status}`,
+			}]
+			: []),
+		{
+			label: tr('detail.side'),
+			value: formatSide(trade.side, plugin.settings.language),
+			modifierClass: isLiveTrade
+				? `trader-journal-trade-detail--side-${trade.side === 'short' ? 'short' : 'long'}`
+				: undefined,
+		},
 		{ label: tr('detail.setup'), value: stringifyValue(trade.setup) },
 		{ label: tr('detail.timeframe'), value: stringifyValue(trade.timeframe) },
-		{ label: tr('detail.result'), value: formatResult(trade.result, plugin.settings.language) },
-		{ label: tr('detail.rr'), value: formatRr(trade.rr) },
-		{ label: tr('detail.entryPrice'), value: formatPrice(trade.entry_price) },
-		{ label: tr('detail.stopLoss'), value: formatPrice(trade.stop_loss) },
-		{ label: tr('detail.exitPrice'), value: formatPrice(trade.exit_price) },
-		{ label: tr('detail.takeProfit'), value: formatPrice(trade.take_profit) },
+		{
+			label: tr('detail.result'),
+			value: formatResult(trade.result, plugin.settings.language),
+			modifierClass: isLiveTrade ? getResultDetailClass(trade.result) : undefined,
+		},
+		{
+			label: tr('detail.rr'),
+			value: formatRr(trade.rr),
+			modifierClass: isLiveTrade ? getRrDetailClass(trade.rr) : undefined,
+		},
+		{
+			label: tr('detail.entryPrice'),
+			value: formatPrice(trade.entry_price),
+			modifierClass: isLiveTrade ? 'trader-journal-trade-detail--entry' : undefined,
+		},
+		{
+			label: tr('detail.stopLoss'),
+			value: formatPrice(trade.stop_loss),
+			modifierClass: isLiveTrade ? 'trader-journal-trade-detail--stop-loss' : undefined,
+		},
+		{
+			label: tr('detail.exitPrice'),
+			value: formatPrice(trade.exit_price),
+			modifierClass: isLiveTrade ? 'trader-journal-trade-detail--exit' : undefined,
+		},
+		{
+			label: tr('detail.takeProfit'),
+			value: formatPrice(trade.take_profit),
+			modifierClass: isLiveTrade ? 'trader-journal-trade-detail--take-profit' : undefined,
+		},
 		{ label: tr('detail.openedAt'), value: formatDateTime(trade.opened_at) },
 		{ label: tr('detail.closedAt'), value: formatDateTime(trade.closed_at) },
 		{ label: tr('detail.holdingTime'), value: holdingTime },
@@ -175,7 +219,23 @@ function renderDetails(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade
 		return;
 	}
 
-	renderDetailGrid(parentEl, detailItems);
+	renderDetailGrid(parentEl, detailItems, ctx);
+}
+
+async function openLinkedPlan(plugin: TraderJournalPlugin, planId: string, sourcePath: string): Promise<void> {
+	const tr = getTranslator(plugin.settings.language);
+	try {
+		const entry = await getTradePlanById(plugin, planId);
+		if (!entry) {
+			new Notice(tr('plan.linkedNotFound'));
+			return;
+		}
+
+		await plugin.app.workspace.openLinkText(entry.filePath, sourcePath, false);
+	} catch (error) {
+		console.error('Trader Journal failed to open linked trade plan', error);
+		new Notice(tr('calendar.openPlanNoteError'));
+	}
 }
 
 function renderTags(parentEl: HTMLElement, trade: TradeEntry): void {
@@ -239,13 +299,6 @@ function renderImage(
 	if (source) {
 		const imageButtonEl = figureEl.createDiv({
 			cls: 'trader-journal-trade-image-button',
-			attr: {
-				role: 'button',
-				tabindex: '0',
-				'aria-label': tr('image.open', {
-					label: label || tr('image.tradeImage', { index: index + 1 }),
-				}),
-			},
 		});
 		imageButtonEl.createEl('img', {
 			attr: {
@@ -255,19 +308,14 @@ function renderImage(
 			},
 		});
 
-		const child = new MarkdownRenderChild(imageButtonEl);
-		child.registerDomEvent(imageButtonEl, 'click', () => {
-			new TradeImageModal(plugin, source, label || tr('image.tradeImage', { index: index + 1 })).open();
-		});
-		child.registerDomEvent(imageButtonEl, 'keydown', (event) => {
-			if (event.key !== 'Enter' && event.key !== ' ') {
-				return;
-			}
-
-			event.preventDefault();
-			new TradeImageModal(plugin, source, label || tr('image.tradeImage', { index: index + 1 })).open();
-		});
-		ctx.addChild(child);
+		const imageLabel = label || tr('image.tradeImage', { index: index + 1 });
+		registerImageModalInteraction(
+			plugin,
+			imageButtonEl,
+			ctx,
+			tr('image.open', { label: imageLabel }),
+			() => new TradeImageModal(plugin, source, imageLabel).open(),
+		);
 	} else {
 		figureEl.createDiv({
 			cls: 'trader-journal-trade-image__missing',
@@ -346,18 +394,43 @@ function renderExtraFields(plugin: TraderJournalPlugin, parentEl: HTMLElement, t
 	renderDetailGrid(sectionEl, detailItems);
 }
 
-function renderDetailGrid(parentEl: HTMLElement, detailItems: DetailItem[]): void {
+function renderDetailGrid(
+	parentEl: HTMLElement,
+	detailItems: DetailItem[],
+	ctx?: MarkdownPostProcessorContext,
+): void {
 	const gridEl = parentEl.createDiv({ cls: 'trader-journal-trade-details' });
 	for (const item of detailItems) {
-		const itemEl = gridEl.createDiv({ cls: 'trader-journal-trade-detail' });
+		const itemEl = gridEl.createDiv({
+			cls: ['trader-journal-trade-detail', item.modifierClass].filter(Boolean).join(' '),
+		});
 		itemEl.createDiv({
 			cls: 'trader-journal-trade-detail__label',
 			text: item.label,
 		});
-		itemEl.createDiv({
-			cls: 'trader-journal-trade-detail__value',
-			text: item.value,
-		});
+		if (item.onSelect && ctx) {
+			const buttonEl = itemEl.createEl('button', {
+				cls: 'trader-journal-trade-detail__value trader-journal-trade-detail__link',
+				text: item.value,
+				attr: {
+					type: 'button',
+					'aria-label': item.selectLabel ?? item.value,
+					title: item.value,
+				},
+			});
+			const child = new MarkdownRenderChild(buttonEl);
+			child.registerDomEvent(buttonEl, 'click', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				item.onSelect?.();
+			});
+			ctx.addChild(child);
+		} else {
+			itemEl.createDiv({
+				cls: 'trader-journal-trade-detail__value',
+				text: item.value,
+			});
+		}
 	}
 }
 
@@ -372,6 +445,22 @@ function getResultModifierClass(value: unknown): string {
 	const raw = stringifyValue(value).toLowerCase();
 	const modifier = raw === 'win' || raw === 'loss' || raw === 'breakeven' ? raw : 'unknown';
 	return `trader-journal-trade-badge--${modifier}`;
+}
+
+function getResultDetailClass(value: unknown): string {
+	const result = stringifyValue(value).toLowerCase();
+	return result === 'win' || result === 'loss' || result === 'breakeven'
+		? `trader-journal-trade-detail--result-${result}`
+		: '';
+}
+
+function getRrDetailClass(value: unknown): string {
+	const rr = Number(value);
+	if (!Number.isFinite(rr)) {
+		return '';
+	}
+
+	return `trader-journal-trade-detail--rr-${rr > 0 ? 'positive' : rr < 0 ? 'negative' : 'neutral'}`;
 }
 
 function getTradeJournalType(

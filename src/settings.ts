@@ -6,6 +6,7 @@ export type TraderJournalLanguage = 'en' | 'vi';
 export const CALENDAR_DISPLAY_MODE_CHANGE_EVENT = 'trader-journal-calendar-display-mode-change';
 export const LANGUAGE_CHANGE_EVENT = 'trader-journal-language-change';
 export const ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT = 'trader-journal-economic-calendar-settings-change';
+export const IMAGE_MODAL_SETTING_CHANGE_EVENT = 'trader-journal-image-modal-setting-change';
 export const DEFAULT_ECONOMIC_CALENDAR_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 export interface TraderJournalSettings {
@@ -15,9 +16,11 @@ export interface TraderJournalSettings {
 	symbols: string[];
 	timeframes: string[];
 	allowRemoteImages: boolean;
+	openImageModalOnClick: boolean;
 	calendarDisplayMode: CalendarDisplayMode;
 	language: TraderJournalLanguage;
 	economicCalendarEnabled: boolean;
+	economicCalendarShowAll: boolean;
 	economicCalendarTimeZone: string;
 	economicCalendarCountries: string[];
 	economicCalendarImpacts: EconomicImpact[];
@@ -30,9 +33,11 @@ export const DEFAULT_SETTINGS: TraderJournalSettings = {
 	symbols: ['NQ', 'ES'],
 	timeframes: ['1m', '3m', '5m', '15m', '1h'],
 	allowRemoteImages: false,
+	openImageModalOnClick: true,
 	calendarDisplayMode: 'month',
 	language: 'en',
 	economicCalendarEnabled: false,
+	economicCalendarShowAll: false,
 	economicCalendarTimeZone: DEFAULT_ECONOMIC_CALENDAR_TIME_ZONE,
 	economicCalendarCountries: ['USD'],
 	economicCalendarImpacts: ['High', 'Medium'],
@@ -46,9 +51,11 @@ export function normalizeSettings(settings: Partial<TraderJournalSettings> | nul
 		symbols: normalizeStringList(settings?.symbols, DEFAULT_SETTINGS.symbols, normalizeSymbol),
 		timeframes: normalizeStringList(settings?.timeframes, DEFAULT_SETTINGS.timeframes, normalizeTimeframe),
 		allowRemoteImages: settings?.allowRemoteImages === true,
+		openImageModalOnClick: settings?.openImageModalOnClick !== false,
 		calendarDisplayMode: normalizeCalendarDisplayMode(settings?.calendarDisplayMode),
 		language: normalizeLanguage(settings?.language),
 		economicCalendarEnabled: settings?.economicCalendarEnabled === true,
+		economicCalendarShowAll: settings?.economicCalendarShowAll === true,
 		economicCalendarTimeZone: normalizeTimeZone(settings?.economicCalendarTimeZone),
 		economicCalendarCountries: normalizeStringList(
 			settings?.economicCalendarCountries,

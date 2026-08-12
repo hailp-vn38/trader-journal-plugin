@@ -6,7 +6,12 @@ export function filterEconomicCalendarEvents(
 	countries: string[],
 	impacts: EconomicImpact[],
 	now: number,
+	showAll = false,
 ): EconomicCalendarEvent[] {
+	if (showAll) {
+		return events;
+	}
+
 	const allowedCountries = new Set(countries.map((country) => country.toUpperCase()));
 	const allowedImpacts = new Set(impacts);
 

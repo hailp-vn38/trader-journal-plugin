@@ -379,7 +379,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	);
 	const plansById = useMemo(() => createPlansById(planSnapshot), [planSnapshot]);
 	const economicEventsByDate = useMemo(() => {
-		if (!plugin.settings.economicCalendarEnabled) {
+		if (journalTypeFilter !== 'live' || !plugin.settings.economicCalendarEnabled) {
 			return {};
 		}
 
@@ -388,9 +388,10 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 			plugin.settings.economicCalendarCountries,
 			plugin.settings.economicCalendarImpacts,
 			economicCalendarNow,
+			plugin.settings.economicCalendarShowAll,
 		);
 		return groupEconomicEventsByDate(filteredEvents, plugin.settings.economicCalendarTimeZone);
-	}, [economicCalendarNow, economicEvents, economicSettingsVersion, plugin]);
+	}, [economicCalendarNow, economicEvents, economicSettingsVersion, journalTypeFilter, plugin]);
 
 	useEffect(() => {
 		if (isLoading) {
@@ -648,7 +649,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 					<div className="trader-journal-calendar__empty">{tr('calendar.loadingTrades')}</div>
 				) : (
 					<>
-						{plugin.settings.economicCalendarEnabled ? (
+						{journalTypeFilter === 'live' && plugin.settings.economicCalendarEnabled ? (
 							<section className="trader-journal-calendar__section">
 								<button
 									type="button"

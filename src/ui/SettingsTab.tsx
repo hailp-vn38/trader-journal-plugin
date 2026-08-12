@@ -8,6 +8,7 @@ import type TraderJournalPlugin from '../main';
 import {
 	CALENDAR_DISPLAY_MODE_CHANGE_EVENT,
 	LANGUAGE_CHANGE_EVENT,
+	IMAGE_MODAL_SETTING_CHANGE_EVENT,
 	normalizeSymbol,
 	normalizeTimeframe,
 } from '../settings';
@@ -29,6 +30,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const [timeframes, setTimeframes] = useState(plugin.settings.timeframes);
 	const [newTimeframe, setNewTimeframe] = useState('');
 	const [allowRemoteImages, setAllowRemoteImages] = useState(plugin.settings.allowRemoteImages);
+	const [openImageModalOnClick, setOpenImageModalOnClick] = useState(plugin.settings.openImageModalOnClick);
 	const [calendarDisplayMode, setCalendarDisplayMode] = useState(plugin.settings.calendarDisplayMode);
 	const tr = getTranslator(language);
 
@@ -81,6 +83,13 @@ function SettingsView({ plugin }: SettingsViewProps) {
 		setAllowRemoteImages(value);
 		plugin.settings.allowRemoteImages = value;
 		void plugin.saveSettings();
+	};
+
+	const saveOpenImageModalOnClick = (value: boolean) => {
+		setOpenImageModalOnClick(value);
+		plugin.settings.openImageModalOnClick = value;
+		void plugin.saveSettings();
+		window.dispatchEvent(new CustomEvent(IMAGE_MODAL_SETTING_CHANGE_EVENT));
 	};
 
 	const saveCalendarDisplayMode = (value: CalendarDisplayMode) => {
@@ -200,6 +209,23 @@ function SettingsView({ plugin }: SettingsViewProps) {
 						onChange={(event: ChangeEvent<HTMLInputElement>) => saveAllowRemoteImages(event.target.checked)}
 					/>
 					<span>{tr('settings.allowRemoteImagePreviews')}</span>
+				</label>
+			</section>
+
+			<section className="trader-journal-setting">
+				<div>
+					<div className="trader-journal-setting__label">{tr('settings.imageModalLabel')}</div>
+					<div className="trader-journal-setting__description">{tr('settings.imageModalDescription')}</div>
+				</div>
+				<label className="trader-journal-toggle">
+					<input
+						type="checkbox"
+						checked={openImageModalOnClick}
+						onChange={(event: ChangeEvent<HTMLInputElement>) =>
+							saveOpenImageModalOnClick(event.target.checked)
+						}
+					/>
+					<span>{tr('settings.openImageModalOnClick')}</span>
 				</label>
 			</section>
 

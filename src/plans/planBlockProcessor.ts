@@ -5,6 +5,7 @@ import { getTranslator } from '../i18n';
 import { normalizeTradeImages, stringifyValue } from '../trades/format';
 import type { NormalizedTradeImage } from '../trades/types';
 import { TradePlanModal } from '../ui/TradePlanModal';
+import { registerImageModalInteraction } from '../ui/imageModalInteraction';
 import { PLAN_CODE_BLOCK_LANGUAGE } from './types';
 import type { TradePlanEntry, TradePlanStatus } from './types';
 import { normalizeLinkedTrades, normalizePlanEndDate, normalizePlanStatus, parsePlanJson } from './storage';
@@ -208,13 +209,6 @@ function renderImage(
 
 	const imageButtonEl = figureEl.createDiv({
 		cls: 'trader-journal-trade-image-button',
-		attr: {
-			role: 'button',
-			tabindex: '0',
-			'aria-label': tr('image.open', {
-				label: label || tr('image.tradeImage', { index: index + 1 }),
-			}),
-		},
 	});
 	imageButtonEl.createEl('img', {
 		attr: {
@@ -224,19 +218,14 @@ function renderImage(
 		},
 	});
 
-	const child = new MarkdownRenderChild(imageButtonEl);
-	child.registerDomEvent(imageButtonEl, 'click', () => {
-		new PlanImageModal(plugin, source, label || tr('image.tradeImage', { index: index + 1 })).open();
-	});
-	child.registerDomEvent(imageButtonEl, 'keydown', (event) => {
-		if (event.key !== 'Enter' && event.key !== ' ') {
-			return;
-		}
-
-		event.preventDefault();
-		new PlanImageModal(plugin, source, label || tr('image.tradeImage', { index: index + 1 })).open();
-	});
-	ctx.addChild(child);
+	const imageLabel = label || tr('image.tradeImage', { index: index + 1 });
+	registerImageModalInteraction(
+		plugin,
+		imageButtonEl,
+		ctx,
+		tr('image.open', { label: imageLabel }),
+		() => new PlanImageModal(plugin, source, imageLabel).open(),
+	);
 }
 
 function renderLinkedTrades(plugin: TraderJournalPlugin, parentEl: HTMLElement, plan: TradePlanEntry): void {

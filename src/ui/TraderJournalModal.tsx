@@ -21,7 +21,7 @@ import {
 	unlinkTradeFromPlan,
 } from '../plans/storage';
 import type { TradePlanOption } from '../plans/types';
-import type { LiveTradeStatus, TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
+import type { TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
 
 const SIDE_OPTIONS: TradeSide[] = ['long', 'short'];
 const RESULT_OPTIONS: TradeResult[] = ['loss', 'win', 'breakeven'];
@@ -37,7 +37,6 @@ interface TraderJournalModalContentProps {
 interface TradeFormState {
 	symbol: string;
 	planId: string;
-	status: LiveTradeStatus;
 	side: TradeSide;
 	setup: string;
 	timeframe: string;
@@ -61,7 +60,7 @@ function TraderJournalModalContent({
 	targetFilePath,
 	closeModal,
 }: TraderJournalModalContentProps) {
-	const [form, setForm] = useState<TradeFormState>(() => createInitialForm(plugin, journalType, initialTrade));
+	const [form, setForm] = useState<TradeFormState>(() => createInitialForm(plugin, initialTrade));
 	const [imageInput, setImageInput] = useState('');
 	const [error, setError] = useState('');
 	const [isSaving, setIsSaving] = useState(false);
@@ -70,14 +69,21 @@ function TraderJournalModalContent({
 	const createdAttachmentPathsRef = useRef<Set<string>>(new Set());
 	const savedTradeRef = useRef(false);
 
-	const holdingTime = useMemo(() => calculateHoldingTime(form.openedAt, form.closedAt), [form.openedAt, form.closedAt]);
-	const liveRr = useMemo(
-		() => calculateLiveRr(form.side, form.entryPrice, form.stopLoss, form.exitPrice),
-		[form.entryPrice, form.exitPrice, form.side, form.stopLoss],
-	);
 	const isLiveJournal = journalType === 'live';
 	const isEditing = Boolean(initialTrade && targetFilePath);
-	const isLiveTradeClosed = !isLiveJournal || form.status === 'closed';
+	const isLiveTradeClosed = !isLiveJournal || Boolean(form.closedAt);
+	const holdingTime = useMemo(() => calculateHoldingTime(form.openedAt, form.closedAt), [form.openedAt, form.closedAt]);
+	const liveRr = useMemo(
+		() =>
+			calculateLiveRr(
+				form.side,
+				form.entryPrice,
+				form.stopLoss,
+				isLiveTradeClosed ? form.exitPrice : form.takeProfit,
+			),
+		[form.entryPrice, form.exitPrice, form.side, form.stopLoss, form.takeProfit, isLiveTradeClosed],
+	);
+	const liveResult = liveRr === null ? null : getTradeResultFromRr(liveRr);
 	const tr = getTranslator(plugin.settings.language);
 
 	useEffect(
@@ -134,15 +140,6 @@ function TraderJournalModalContent({
 				journalType === 'backtest'
 					? syncClosedAtDate(openedAt, currentForm.openedAt, currentForm.closedAt)
 					: currentForm.closedAt,
-		}));
-	}
-
-	function updateLiveStatus(status: LiveTradeStatus) {
-		setForm((currentForm) => ({
-			...currentForm,
-			status,
-			closedAt:
-				status === 'closed' && !currentForm.closedAt ? getCurrentDateTimeLocalInput() : currentForm.closedAt,
 		}));
 	}
 
@@ -243,12 +240,15 @@ function TraderJournalModalContent({
 			setError(validationError);
 			return;
 		}
-
 		const symbol = normalizeSymbol(form.symbol);
 		const journalDate = getTodayDateInput();
 		const openedAt = toLocalIsoString(form.openedAt);
 		const closedAt = isLiveTradeClosed ? toLocalIsoString(form.closedAt) : '';
-		const rr = isLiveJournal ? (isLiveTradeClosed ? (liveRr ?? 0) : 0) : Number(form.rr);
+		const rr = isLiveJournal ? liveRr : Number(form.rr);
+		if (rr === null) {
+			setError(tr('error.liveRrRisk'));
+			return;
+		}
 		const pendingImage = createTradeImage(imageInput);
 		const images =
 			pendingImage && !form.images.some((image) => image.value === pendingImage.value)
@@ -277,9 +277,9 @@ function TraderJournalModalContent({
 			trade.holding_time = calculateHoldingTime(openedAt, closedAt);
 			trade.tags = parseTags(form.tags);
 		} else {
-			trade.status = form.status;
-			if (isLiveTradeClosed) {
-				trade.result = form.result;
+			trade.status = isLiveTradeClosed ? 'closed' : 'open';
+			if (isLiveTradeClosed && liveResult) {
+				trade.result = liveResult;
 				trade.closed_at = closedAt;
 				trade.exit_price = Number(form.exitPrice);
 				trade.holding_time = calculateHoldingTime(openedAt, closedAt);
@@ -340,21 +340,6 @@ function TraderJournalModalContent({
 
 				{isLiveJournal ? (
 					<label className="trader-journal-field">
-						<span>{tr('detail.status')}</span>
-						<select
-							value={form.status}
-							onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-								updateLiveStatus(event.target.value as LiveTradeStatus)
-							}
-						>
-							<option value="open">{tr('option.open')}</option>
-							<option value="closed">{tr('option.closed')}</option>
-						</select>
-					</label>
-				) : null}
-
-				{isLiveJournal ? (
-					<label className="trader-journal-field">
 						<span>{tr('detail.plan')}</span>
 						<select
 							value={form.planId}
@@ -400,7 +385,7 @@ function TraderJournalModalContent({
 					</select>
 				</label>
 
-				{isLiveJournal && !isLiveTradeClosed ? null : (
+				{!isLiveJournal ? (
 					<label className="trader-journal-field">
 						<span>{tr('detail.result')}</span>
 						<select
@@ -416,6 +401,13 @@ function TraderJournalModalContent({
 							))}
 						</select>
 					</label>
+				) : (
+					<div className="trader-journal-field trader-journal-field--readonly">
+						<span>{tr('detail.result')}</span>
+						<strong>
+							{!isLiveTradeClosed || liveResult === null ? '-' : tr(getResultOptionKey(liveResult))}
+						</strong>
+					</div>
 				)}
 
 				<label className="trader-journal-field">
@@ -455,19 +447,18 @@ function TraderJournalModalContent({
 							/>
 						</label>
 
-							{isLiveTradeClosed ? (
-								<label className="trader-journal-field">
-									<span>{tr('detail.exitPrice')}</span>
-									<input
-										type="number"
-										step="0.01"
-										value={form.exitPrice}
-										placeholder="102"
-										onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('exitPrice', event.target.value)}
-										required
-									/>
-								</label>
-							) : null}
+						<label className="trader-journal-field">
+							<span>{tr('detail.exitPrice')}</span>
+							<input
+								type="number"
+								step="0.01"
+								value={form.exitPrice}
+								placeholder="102"
+								disabled={!isLiveTradeClosed}
+								onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('exitPrice', event.target.value)}
+								required={isLiveTradeClosed}
+							/>
+						</label>
 
 						<label className="trader-journal-field">
 							<span>{tr('detail.takeProfit')}</span>
@@ -493,17 +484,15 @@ function TraderJournalModalContent({
 					/>
 				</label>
 
-				{isLiveJournal && !isLiveTradeClosed ? null : (
-					<label className="trader-journal-field">
-						<span>{tr('detail.closedAt')}</span>
-						<input
-							type="datetime-local"
-							value={form.closedAt}
-							onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('closedAt', event.target.value)}
-							required
-						/>
-					</label>
-				)}
+				<label className="trader-journal-field">
+					<span>{tr('detail.closedAt')}</span>
+					<input
+						type="datetime-local"
+						value={form.closedAt}
+						onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('closedAt', event.target.value)}
+						required={!isLiveJournal}
+					/>
+				</label>
 
 				<div className="trader-journal-field trader-journal-field--readonly">
 					<span>{tr('detail.holdingTime')}</span>
@@ -513,7 +502,7 @@ function TraderJournalModalContent({
 				{isLiveJournal ? (
 					<div className="trader-journal-field trader-journal-field--readonly">
 						<span>RR</span>
-						<strong>{!isLiveTradeClosed || liveRr === null ? '-' : `${formatComputedRr(liveRr)}R`}</strong>
+						<strong>{liveRr === null ? '-' : `${formatComputedRr(liveRr)}R`}</strong>
 					</div>
 				) : null}
 			</div>
@@ -643,16 +632,11 @@ export class TraderJournalModal extends Modal {
 
 function createInitialForm(
 	plugin: TraderJournalPlugin,
-	journalType: TradeJournalType,
 	initialTrade: TradeEntry | undefined,
 ): TradeFormState {
-	const isLiveJournal = journalType === 'live';
-	const status = getInitialLiveStatus(initialTrade);
-
 	return {
 		symbol: stringifyValue(initialTrade?.symbol) || plugin.settings.symbols[0] || '',
 		planId: stringifyValue(initialTrade?.plan_id),
-		status,
 		side: initialTrade?.side === 'short' ? 'short' : 'long',
 		setup: stringifyValue(initialTrade?.setup),
 		timeframe: stringifyValue(initialTrade?.timeframe) || plugin.settings.timeframes[0] || '',
@@ -666,16 +650,8 @@ function createInitialForm(
 		images: normalizeTradeImages(initialTrade?.images),
 		notes: stringifyValue(initialTrade?.notes),
 		openedAt: toDateTimeLocalInput(initialTrade?.opened_at),
-		closedAt: isLiveJournal && status === 'open' ? '' : toDateTimeLocalInput(initialTrade?.closed_at),
+		closedAt: toDateTimeLocalInput(initialTrade?.closed_at),
 	};
-}
-
-function getInitialLiveStatus(initialTrade: TradeEntry | undefined): LiveTradeStatus {
-	if (initialTrade?.status === 'open' || initialTrade?.status === 'closed') {
-		return initialTrade.status;
-	}
-
-	return stringifyValue(initialTrade?.closed_at) ? 'closed' : 'open';
 }
 
 async function syncTradePlanLink(
@@ -735,7 +711,7 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType, tr: T
 	}
 
 	if (journalType === 'live') {
-		const isClosed = form.status === 'closed';
+		const isClosed = Boolean(form.closedAt);
 		const entryPrice = parseRequiredNumber(form.entryPrice);
 		const stopLoss = parseRequiredNumber(form.stopLoss);
 		const takeProfit = parseRequiredNumber(form.takeProfit);
@@ -784,10 +760,6 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType, tr: T
 		return tr('error.openedClosedRequired');
 	}
 
-	if (journalType === 'live' && form.status === 'closed' && !form.closedAt) {
-		return tr('error.closedRequired');
-	}
-
 	if (form.closedAt && calculateHoldingTime(form.openedAt, form.closedAt) === null) {
 		return tr('error.closedAfterOpened');
 	}
@@ -807,11 +779,11 @@ function getResultOptionKey(result: TradeResult): 'option.loss' | 'option.win' |
 	return 'option.loss';
 }
 
-function calculateLiveRr(side: TradeSide, entryPrice: string, stopLoss: string, exitPrice: string): number | null {
+function calculateLiveRr(side: TradeSide, entryPrice: string, stopLoss: string, targetPrice: string): number | null {
 	const entry = parseRequiredNumber(entryPrice);
 	const stop = parseRequiredNumber(stopLoss);
-	const exit = parseRequiredNumber(exitPrice);
-	if (entry === null || stop === null || exit === null) {
+	const target = parseRequiredNumber(targetPrice);
+	if (entry === null || stop === null || target === null) {
 		return null;
 	}
 
@@ -820,8 +792,20 @@ function calculateLiveRr(side: TradeSide, entryPrice: string, stopLoss: string, 
 		return null;
 	}
 
-	const realizedMove = side === 'short' ? entry - exit : exit - entry;
-	return roundNumber(realizedMove / risk);
+	const priceMove = side === 'short' ? entry - target : target - entry;
+	return roundNumber(priceMove / risk);
+}
+
+function getTradeResultFromRr(rr: number): TradeResult {
+	if (rr > 0) {
+		return 'win';
+	}
+
+	if (rr < 0) {
+		return 'loss';
+	}
+
+	return 'breakeven';
 }
 
 function parseRequiredNumber(value: string): number | null {
@@ -1121,10 +1105,6 @@ function cleanImageValue(value: string): string {
 function getTodayDateInput(): string {
 	const now = new Date();
 	return `${now.getFullYear()}-${padDatePart(now.getMonth() + 1)}-${padDatePart(now.getDate())}`;
-}
-
-function getCurrentDateTimeLocalInput(): string {
-	return formatDateTimeLocalInput(new Date());
 }
 
 function toDateTimeLocalInput(value: unknown): string {

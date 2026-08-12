@@ -55,6 +55,7 @@ export function EconomicCalendarSettings({
 	plugin: TraderJournalPlugin;
 }) {
 	const [enabled, setEnabled] = useState(plugin.settings.economicCalendarEnabled);
+	const [showAll, setShowAll] = useState(plugin.settings.economicCalendarShowAll);
 	const [timeZone, setTimeZone] = useState(plugin.settings.economicCalendarTimeZone);
 	const [countries, setCountries] = useState(plugin.settings.economicCalendarCountries);
 	const [newCountry, setNewCountry] = useState('');
@@ -71,6 +72,13 @@ export function EconomicCalendarSettings({
 	const saveTimeZone = (value: string) => {
 		setTimeZone(value);
 		plugin.settings.economicCalendarTimeZone = value;
+		void plugin.saveSettings();
+		notifySettingsChange();
+	};
+
+	const saveShowAll = (value: boolean) => {
+		setShowAll(value);
+		plugin.settings.economicCalendarShowAll = value;
 		void plugin.saveSettings();
 		notifySettingsChange();
 	};
@@ -147,6 +155,24 @@ export function EconomicCalendarSettings({
 				</label>
 			</section>
 
+			<section className="trader-journal-setting">
+				<div>
+					<div className="trader-journal-setting__label">{tr('settings.economicShowAllLabel')}</div>
+					<div className="trader-journal-setting__description">
+						{tr('settings.economicShowAllDescription')}
+					</div>
+				</div>
+				<label className="trader-journal-toggle">
+					<input
+						type="checkbox"
+						checked={showAll}
+						disabled={!enabled}
+						onChange={(event: ChangeEvent<HTMLInputElement>) => saveShowAll(event.target.checked)}
+					/>
+					<span>{tr('settings.showAllEconomicEvents')}</span>
+				</label>
+			</section>
+
 			<label className="trader-journal-setting">
 				<span className="trader-journal-setting__label">{tr('settings.economicTimeZoneLabel')}</span>
 				<span className="trader-journal-setting__description">
@@ -181,11 +207,11 @@ export function EconomicCalendarSettings({
 							type="text"
 							value={newCountry}
 							placeholder="USD"
-							disabled={!enabled}
+							disabled={!enabled || showAll}
 							onChange={(event: ChangeEvent<HTMLInputElement>) => setNewCountry(event.target.value)}
 							onKeyDown={handleAddKey}
 						/>
-						<button type="button" disabled={!enabled} onClick={addCountry}>
+						<button type="button" disabled={!enabled || showAll} onClick={addCountry}>
 							{tr('action.add')}
 						</button>
 					</div>
@@ -196,7 +222,7 @@ export function EconomicCalendarSettings({
 								<button
 									type="button"
 									aria-label={`${tr('action.remove')} ${country}`}
-									disabled={!enabled || countries.length <= 1}
+									disabled={!enabled || showAll || countries.length <= 1}
 									onClick={() => removeCountry(country)}
 								>
 									{tr('action.remove')}
@@ -220,7 +246,7 @@ export function EconomicCalendarSettings({
 							<input
 								type="checkbox"
 								checked={impacts.includes(impact)}
-								disabled={!enabled || (impacts.length === 1 && impacts.includes(impact))}
+								disabled={!enabled || showAll || (impacts.length === 1 && impacts.includes(impact))}
 								onChange={(event: ChangeEvent<HTMLInputElement>) =>
 									toggleImpact(impact, event.target.checked)
 								}

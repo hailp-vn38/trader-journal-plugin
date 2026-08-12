@@ -16,7 +16,7 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 - Auto-calculate holding time from opened and closed timestamps.
 - Paste image files directly into the Images input; unsaved pasted images are moved to trash if the modal closes without saving.
 - Render trade JSON blocks as cards in Reading View.
-- Click a rendered image to open a full-screen image preview.
+- Optionally select a rendered image to open a full-screen image preview.
 - Recalculate daily statistics automatically when a journal note changes.
 - Recalculate the active note manually with the command **Recalculate current stats**.
 
@@ -86,9 +86,9 @@ Trades are stored as fenced JSON code blocks:
 
 The JSON block is the source of truth. The `date` field stores when the trade entry was created and is used to sort items inside a calendar day. The summary table and frontmatter statistics are regenerated from the trade blocks. Invalid trade JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` so they are not silently hidden from the daily stats.
 
-Live trade RR is calculated automatically from actual risk. For long trades it uses `(exit_price - entry_price) / (entry_price - stop_loss)`. For short trades it uses `(entry_price - exit_price) / (stop_loss - entry_price)`.
+Live trade RR is calculated automatically from actual risk. While a trade is open, the calculation uses `take_profit` as the target price. Once the trade is closed, it uses `exit_price` instead. For long trades the formula is `(target_price - entry_price) / (entry_price - stop_loss)`. For short trades it is `(entry_price - target_price) / (stop_loss - entry_price)`. Closed live trade results are derived from the calculated RR: positive is a win, negative is a loss, and zero is breakeven.
 
-Live trades can be `open` or `closed`. Open live trades store `opened_at` without automatically creating `closed_at`; when a live trade is changed to `closed`, `closed_at` is filled with the current time unless the user edits it.
+Live trade status is derived from `closed_at`: a blank value means `open`, while setting a closing time makes the trade `closed`.
 
 Backtest daily note properties include `backtest_start_date` and `backtest_end_date` with empty values so users can manually record the date range of the backtested data.
 
@@ -103,10 +103,12 @@ Backtest daily note properties include `backtest_start_date` and `backtest_end_d
 
 - **Backtest journal folder**: Root folder for generated backtest journal files.
 - **Live journal folder**: Root folder for generated live journal files.
+- **Economic event filters**: Optionally show every event returned for the source week without time, country/currency, or impact filters.
 - **Symbols**: Symbols shown in the trade modal.
 - **Timeframes**: Timeframes shown in the trade modal.
 - **Calendar display**: Chooses the month grid or horizontal calendar layout in the sidebar.
 - **Remote images**: Allows image previews from external URLs. This is disabled by default.
+- **Image preview modal**: Controls whether selecting an image in a rendered trade or plan block opens the large preview.
 - **Economic calendar**: Enables loading this week's events from Faireconomy. This is disabled by default.
 - **Economic calendar time zone**: Controls how economic event dates and times are displayed. Defaults to `Asia/Ho_Chi_Minh`.
 - **Countries and currencies**: Only matching event codes such as `USD`, `EUR`, or `GBP` are shown.
