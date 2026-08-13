@@ -5,6 +5,7 @@ import { rebuildDailyNoteStats } from '../trades/storage';
 import { openTraderJournalCalendar } from '../ui/TradeCalendarView';
 import { TradePlanModal } from '../ui/TradePlanModal';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
+import { TradeSetupModal } from '../ui/TradeSetupModal';
 import { openTraderJournalDashboard } from '../dashboard/DashboardView';
 
 export function registerCommands(plugin: TraderJournalPlugin) {
@@ -31,6 +32,14 @@ export function registerCommands(plugin: TraderJournalPlugin) {
 		name: tr('command.addTradePlan'),
 		callback: () => {
 			new TradePlanModal(plugin.app, plugin).open();
+		},
+	});
+
+	plugin.addCommand({
+		id: 'add-trade-setup',
+		name: tr('command.addTradeSetup'),
+		callback: () => {
+			new TradeSetupModal(plugin.app, plugin).open();
 		},
 	});
 

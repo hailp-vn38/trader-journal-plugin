@@ -5,6 +5,9 @@ import { splitFrontmatter } from '../trades/parser';
 import { stringifyValue } from '../trades/format';
 import { PLAN_CODE_BLOCK_LANGUAGE } from './types';
 import type { LinkedTradeRef, TradePlanEntry, TradePlanOption, TradePlanStatus } from './types';
+import { listTradeSetups } from '../setups/storage';
+import { createWikiLink } from '../utils/wikiLinks';
+import { mergeFrontmatterTags } from '../utils/frontmatterTags';
 
 const PLAN_NOTE_TYPE = 'trader-journal-live-plan';
 const SCHEMA_VERSION = 1;
@@ -106,7 +109,8 @@ export async function saveTradePlan(
 
 	const filePath = getUniquePlanFilePath(plugin, normalizedPlan);
 	await ensureFolder(plugin, getParentPath(filePath));
-	const file = await plugin.app.vault.create(filePath, renderPlanNote(normalizedPlan));
+	const setupLink = await resolveSetupLink(plugin, normalizedPlan);
+	const file = await plugin.app.vault.create(filePath, renderPlanNote(normalizedPlan, setupLink));
 	await updatePlanFrontmatter(plugin, file, normalizedPlan);
 	return file;
 }
@@ -186,6 +190,8 @@ export async function listTradePlanOptions(
 			startDate: stringifyValue(plan.start_date),
 			endDate: normalizePlanEndDate(plan.end_date),
 			filePath,
+			setupId: stringifyValue(plan.setup_id),
+			setup: stringifyValue(plan.setup),
 		}))
 		.filter((option) => option.id && option.title && option.symbol && isDateKey(option.startDate))
 		.sort((firstPlan, secondPlan) => {
@@ -376,9 +382,9 @@ function collectPlanFiles(plugin: TraderJournalPlugin, folder: TFolder, files: T
 	}
 }
 
-function renderPlanNote(plan: TradePlanEntry): string {
+function renderPlanNote(plan: TradePlanEntry, setupLink: string): string {
 	const title = stringifyValue(plan.title) || 'Trade plan';
-	const frontmatter = stringifyYaml(createPlanMetadata(plan));
+	const frontmatter = stringifyYaml(createPlanMetadata(plan, setupLink));
 
 	return `---\n${frontmatter}---\n\n# ${title}\n\n${renderPlanBlock(plan)}\n`;
 }
@@ -392,28 +398,44 @@ async function updatePlanFrontmatter(
 	file: TFile,
 	plan: TradePlanEntry,
 ): Promise<void> {
-	const metadata = createPlanMetadata(plan);
+	const metadata = createPlanMetadata(plan, await resolveSetupLink(plugin, plan));
 	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
 		const targetMetadata = frontmatter as Record<string, unknown>;
+		const tags = mergeFrontmatterTags(targetMetadata.tags, [PLAN_NOTE_TYPE]);
 		for (const [key, value] of Object.entries(metadata)) {
 			targetMetadata[key] = value;
 		}
+		targetMetadata.tags = tags;
 	});
 }
 
-function createPlanMetadata(plan: TradePlanEntry): Record<string, unknown> {
+function createPlanMetadata(plan: TradePlanEntry, setupLink: string): Record<string, unknown> {
 	return {
 		type: PLAN_NOTE_TYPE,
+		tags: [PLAN_NOTE_TYPE],
 		schemaVersion: SCHEMA_VERSION,
 		journalType: 'live',
 		planId: stringifyValue(plan.id),
 		symbol: normalizeSymbol(stringifyValue(plan.symbol)),
 		title: stringifyValue(plan.title),
+		setupId: stringifyValue(plan.setup_id),
+		setup: stringifyValue(plan.setup),
+		setupLink,
 		status: normalizePlanStatus(plan.status),
 		startDate: stringifyValue(plan.start_date),
 		endDate: normalizePlanEndDate(plan.end_date),
 		linkedTradeCount: normalizeLinkedTrades(plan.linked_trades).length,
 	};
+}
+
+async function resolveSetupLink(plugin: TraderJournalPlugin, plan: TradePlanEntry): Promise<string> {
+	const setupId = stringifyValue(plan.setup_id);
+	if (!setupId) {
+		return '';
+	}
+
+	const setup = (await listTradeSetups(plugin)).find((item) => item.id === setupId);
+	return setup ? createWikiLink(setup.filePath) : '';
 }
 
 function getUniquePlanFilePath(plugin: TraderJournalPlugin, plan: TradePlanEntry): string {

@@ -12,6 +12,9 @@ import { normalizeTradeImages, stringifyValue } from '../trades/format';
 import type { TradeImage } from '../trades/types';
 import { normalizeLinkedTrades, normalizePlanEndDate, normalizePlanStatus, saveTradePlan } from '../plans/storage';
 import type { TradePlanBias, TradePlanEntry, TradePlanStatus } from '../plans/types';
+import { isSetupAvailableForSymbol, listTradeSetups } from '../setups/storage';
+import type { TradeSetupDefinition } from '../setups/types';
+import { TradeSetupModal } from './TradeSetupModal';
 
 const PLAN_STATUS_OPTIONS: TradePlanStatus[] = ['open', 'closed', 'cancelled'];
 const PLAN_BIAS_OPTIONS: TradePlanBias[] = ['neutral', 'long', 'short'];
@@ -28,6 +31,7 @@ interface TradePlanFormState {
 	title: string;
 	status: TradePlanStatus;
 	bias: TradePlanBias;
+	setupId: string;
 	setup: string;
 	timeframes: string;
 	startDate: string;
@@ -51,11 +55,37 @@ function TradePlanModalContent({
 	const [error, setError] = useState('');
 	const [isSaving, setIsSaving] = useState(false);
 	const [isPastingImage, setIsPastingImage] = useState(false);
+	const [setupOptions, setSetupOptions] = useState<TradeSetupDefinition[]>([]);
+	const [isLoadingSetups, setIsLoadingSetups] = useState(true);
 	const createdAttachmentPathsRef = useRef<Set<string>>(new Set());
 	const savedPlanRef = useRef(false);
 	const isEditing = Boolean(initialPlan && targetFilePath);
 	const linkedTrades = normalizeLinkedTrades(initialPlan?.linked_trades);
 	const tr = getTranslator(plugin.settings.language);
+
+	useEffect(() => {
+		let disposed = false;
+		void listTradeSetups(plugin)
+			.then((setups) => {
+				if (!disposed) {
+					setSetupOptions(
+						setups.filter((setup) => setup.status === 'active' || setup.id === form.setupId),
+					);
+				}
+			})
+			.catch((loadError: unknown) => {
+				console.error('Trader Journal failed to load trade setups', loadError);
+			})
+			.finally(() => {
+				if (!disposed) {
+					setIsLoadingSetups(false);
+				}
+			});
+
+		return () => {
+			disposed = true;
+		};
+	}, [form.setupId, plugin]);
 
 	useEffect(
 		() => () => {
@@ -79,6 +109,68 @@ function TradePlanModalContent({
 			status,
 			endDate: status !== 'open' && !currentForm.endDate ? getTodayDateInput() : currentForm.endDate,
 		}));
+	}
+
+	function updateSymbol(symbol: string) {
+		setForm((currentForm) => {
+			const selectedSetup = setupOptions.find((setup) => setup.id === currentForm.setupId);
+			const keepHistoricalSetup =
+				isEditing &&
+				symbol === normalizeSymbol(stringifyValue(initialPlan?.symbol)) &&
+				currentForm.setupId === stringifyValue(initialPlan?.setup_id);
+			if (!selectedSetup || isSetupAvailableForSymbol(selectedSetup, symbol) || keepHistoricalSetup) {
+				return { ...currentForm, symbol };
+			}
+
+			return { ...currentForm, symbol, setupId: '', setup: '' };
+		});
+	}
+
+	function selectSetup(setupId: string) {
+		const setup = setupOptions.find((item) => item.id === setupId);
+		if (!setup) {
+			setForm((currentForm) => ({ ...currentForm, setupId: '', setup: '' }));
+			return;
+		}
+
+		setForm((currentForm) => ({
+			...currentForm,
+			setupId: setup.id,
+			setup: setup.name,
+			timeframes: setup.timeframes.join(', '),
+			entryPlan: setup.entryCriteria,
+			invalidation: setup.invalidation,
+			takeProfitPlan: setup.takeProfit,
+			riskNotes: setup.riskRules,
+		}));
+	}
+
+	function createSetup() {
+		new TradeSetupModal(plugin.app, plugin, {
+			onSaved: (setup) => {
+				setSetupOptions((current) => [...current.filter((item) => item.id !== setup.id), setup]);
+				setForm((currentForm) =>
+					isSetupAvailableForSymbol(setup, currentForm.symbol)
+						? {
+							...currentForm,
+							setupId: setup.id,
+							setup: setup.name,
+							timeframes: setup.timeframes.join(', '),
+						}
+						: currentForm,
+				);
+			},
+			openAfterSave: false,
+		}).open();
+	}
+
+	async function openLinkedTrade(filePath: string) {
+		try {
+			await plugin.app.workspace.openLinkText(filePath, targetFilePath ?? '', false);
+		} catch (openError) {
+			console.error('Trader Journal failed to open linked trade from plan modal', openError);
+			new Notice(tr('calendar.openTradeNoteError'));
+		}
 	}
 
 	const addImages = (images: TradeImage[]) => {
@@ -197,7 +289,9 @@ function TradePlanModalContent({
 			start_date: form.startDate,
 			end_date: endDate,
 			bias: form.bias,
+			setup_id: form.setupId,
 			setup: form.setup.trim(),
+			setup_updated_at: setupOptions.find((setup) => setup.id === form.setupId)?.updatedAt ?? '',
 			timeframes: parseCsvList(form.timeframes),
 			entry_plan: form.entryPlan.trim(),
 			invalidation: form.invalidation.trim(),
@@ -235,7 +329,7 @@ function TradePlanModalContent({
 					<span>{tr('detail.symbol')}</span>
 					<select
 						value={form.symbol}
-						onChange={(event: ChangeEvent<HTMLSelectElement>) => updateField('symbol', event.target.value)}
+					onChange={(event: ChangeEvent<HTMLSelectElement>) => updateSymbol(event.target.value)}
 						required
 					>
 						<option value="">{tr('placeholder.selectSymbol')}</option>
@@ -316,15 +410,34 @@ function TradePlanModalContent({
 				/>
 			</label>
 
-			<label className="trader-journal-field">
+			<div className="trader-journal-field">
 				<span>{tr('detail.setup')}</span>
-				<input
-					type="text"
-					value={form.setup}
-					placeholder={tr('placeholder.openingRangeBreakout')}
-					onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('setup', event.target.value)}
-				/>
-			</label>
+				<div className="trader-journal-setup-select-row">
+					<select
+						value={form.setupId}
+						onChange={(event: ChangeEvent<HTMLSelectElement>) => selectSetup(event.target.value)}
+						required
+						disabled={isLoadingSetups}
+					>
+						<option value="">
+							{isLoadingSetups ? tr('placeholder.loadingSetups') : tr('placeholder.selectSetup')}
+						</option>
+						{setupOptions
+							.filter(
+								(setup) =>
+									isSetupAvailableForSymbol(setup, form.symbol) || setup.id === form.setupId,
+							)
+							.map((setup) => (
+							<option value={setup.id} key={setup.id}>
+								{setup.name}{setup.status === 'archived' ? ` (${tr('option.archived')})` : ''}
+							</option>
+							))}
+					</select>
+					<button type="button" onClick={createSetup}>
+						{tr('action.createSetup')}
+					</button>
+				</div>
+			</div>
 
 			<label className="trader-journal-field">
 				<span>{tr('detail.entryPlan')}</span>
@@ -407,7 +520,17 @@ function TradePlanModalContent({
 					<ul>
 						{linkedTrades.map((tradeRef) => (
 							<li key={`${tradeRef.trade_id ?? ''}-${tradeRef.file_path ?? ''}`}>
-								{tradeRef.label || tradeRef.trade_id || tradeRef.file_path}
+								{tradeRef.file_path ? (
+									<button
+										type="button"
+										className="trader-journal-plan-linked-trade-button"
+										onClick={() => void openLinkedTrade(tradeRef.file_path ?? '')}
+									>
+										{tradeRef.label || tradeRef.trade_id || tradeRef.file_path}
+									</button>
+								) : (
+									tradeRef.label || tradeRef.trade_id
+								)}
 							</li>
 						))}
 					</ul>
@@ -480,6 +603,7 @@ function createInitialPlanForm(
 		title: stringifyValue(initialPlan?.title),
 		status: normalizePlanStatus(initialPlan?.status),
 		bias: normalizePlanBias(initialPlan?.bias),
+		setupId: stringifyValue(initialPlan?.setup_id),
 		setup: stringifyValue(initialPlan?.setup),
 		timeframes: formatCsvList(initialPlan?.timeframes),
 		startDate: stringifyValue(initialPlan?.start_date) || getTodayDateInput(),
@@ -500,6 +624,10 @@ function validatePlanForm(form: TradePlanFormState, tr: Translator): string | nu
 
 	if (!form.title.trim()) {
 		return tr('error.planTitleRequired');
+	}
+
+	if (!form.setupId) {
+		return tr('error.setupRequired');
 	}
 
 	if (!isDateKey(form.startDate)) {

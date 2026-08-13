@@ -13,6 +13,10 @@ import {
 import { extractTrades, hasTradeBlocks, parseFrontmatter, splitFrontmatter } from './parser';
 import { TRADE_CODE_BLOCK_LANGUAGE } from './types';
 import type { TradeEntry, TradeJournalType } from './types';
+import { listTradeSetups } from '../setups/storage';
+import { getTradePlanById } from '../plans/storage';
+import { createWikiLink } from '../utils/wikiLinks';
+import { mergeFrontmatterTags } from '../utils/frontmatterTags';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -53,6 +57,11 @@ interface RebuiltNote {
 	metadata: Record<string, unknown>;
 	stats: DailyTradeStats;
 	skipped: boolean;
+}
+
+interface JournalGraphLinks {
+	setupLinks: string[];
+	planLinks: string[];
 }
 
 export async function saveTradeToDailyNote(
@@ -143,7 +152,14 @@ export async function rebuildDailyNoteStats(
 	}
 
 	const initialContent = await plugin.app.vault.read(file);
-	const initialRebuild = buildRebuiltNote(file, initialContent, fallbackIdentity, plugin.settings.language);
+	const graphLinks = await resolveJournalGraphLinks(plugin, initialContent);
+	const initialRebuild = buildRebuiltNote(
+		file,
+		initialContent,
+		fallbackIdentity,
+		plugin.settings.language,
+		graphLinks,
+	);
 	if (initialRebuild.skipped) {
 		return {
 			stats: initialRebuild.stats,
@@ -158,7 +174,13 @@ export async function rebuildDailyNoteStats(
 
 	if (initialRebuild.content !== initialContent) {
 		await plugin.app.vault.process(file, (latestContent) => {
-			const latestRebuild = buildRebuiltNote(file, latestContent, fallbackIdentity, plugin.settings.language);
+			const latestRebuild = buildRebuiltNote(
+				file,
+				latestContent,
+				fallbackIdentity,
+				plugin.settings.language,
+				graphLinks,
+			);
 			if (latestRebuild.skipped) {
 				return latestContent;
 			}
@@ -247,6 +269,7 @@ function renderInitialNote(
 	const stats = getEmptyStats();
 	const frontmatter = stringifyYaml({
 		type: getNoteType(journalType),
+		tags: [getNoteType(journalType)],
 		schemaVersion: SCHEMA_VERSION,
 		journalType,
 		symbol,
@@ -262,6 +285,8 @@ function renderInitialNote(
 		worstRr: null,
 		winRate: 0,
 		tradeTags: [],
+		setupLinks: [],
+		planLinks: [],
 		...(journalType === 'backtest'
 			? {
 					backtest_start_date: null,
@@ -325,6 +350,7 @@ function buildRebuiltNote(
 	content: string,
 	fallbackIdentity: Partial<JournalIdentity> | undefined,
 	language: TraderJournalLanguage,
+	graphLinks: JournalGraphLinks,
 ): RebuiltNote {
 	const { frontmatter, body } = splitFrontmatter(content);
 	const parsedFrontmatter = parseFrontmatter(frontmatter);
@@ -346,7 +372,7 @@ function buildRebuiltNote(
 
 	const identity = getJournalIdentity(file, parsedFrontmatter, trades, fallbackIdentity);
 	const stats = calculateDailyTradeStats(trades, extractedTrades.invalidTradeBlockCount, identity.journalType);
-	const metadata = createDailyMetadata(identity, stats, parsedFrontmatter);
+	const metadata = createDailyMetadata(identity, stats, parsedFrontmatter, graphLinks);
 	const summary = renderDailySummary(identity.symbol, identity.journalDate, identity.journalType, stats, language);
 	const bodyWithSummary = upsertSummary(ensureTradesSection(body), summary);
 
@@ -362,9 +388,11 @@ function createDailyMetadata(
 	identity: JournalIdentity,
 	stats: DailyTradeStats,
 	frontmatter: Record<string, unknown>,
+	graphLinks: JournalGraphLinks,
 ): Record<string, unknown> {
 	const metadata: Record<string, unknown> = {
 		type: getNoteType(identity.journalType),
+		tags: mergeFrontmatterTags(frontmatter.tags, [getNoteType(identity.journalType)]),
 		schemaVersion: SCHEMA_VERSION,
 		journalType: identity.journalType,
 		symbol: identity.symbol,
@@ -380,6 +408,8 @@ function createDailyMetadata(
 		worstRr: stats.worstRr === null ? null : roundNumber(stats.worstRr),
 		winRate: roundNumber(stats.winRate),
 		tradeTags: stats.tags,
+		setupLinks: graphLinks.setupLinks,
+		planLinks: identity.journalType === 'live' ? graphLinks.planLinks : [],
 	};
 
 	if (identity.journalType === 'backtest') {
@@ -389,6 +419,31 @@ function createDailyMetadata(
 	}
 
 	return metadata;
+}
+
+async function resolveJournalGraphLinks(
+	plugin: TraderJournalPlugin,
+	content: string,
+): Promise<JournalGraphLinks> {
+	const { body } = splitFrontmatter(content);
+	const { trades } = extractTrades(body);
+	const setupIds = new Set(trades.map((trade) => stringifyValue(trade.setup_id)).filter(Boolean));
+	const planIds = new Set(trades.map((trade) => stringifyValue(trade.plan_id)).filter(Boolean));
+	const setups = setupIds.size ? await listTradeSetups(plugin) : [];
+	const setupsById = new Map(setups.map((setup) => [setup.id, setup]));
+	const setupLinks = [...setupIds]
+		.map((setupId) => setupsById.get(setupId))
+		.filter((setup) => setup !== undefined)
+		.map((setup) => createWikiLink(setup.filePath));
+	const planEntries = await Promise.all([...planIds].map((planId) => getTradePlanById(plugin, planId)));
+	const planLinks = planEntries
+		.filter((entry) => entry !== null)
+		.map((entry) => createWikiLink(entry.filePath));
+
+	return {
+		setupLinks: [...new Set(setupLinks)].filter(Boolean),
+		planLinks: [...new Set(planLinks)].filter(Boolean),
+	};
 }
 
 function getJournalIdentity(

@@ -22,6 +22,8 @@ import {
 } from '../plans/storage';
 import type { TradePlanOption } from '../plans/types';
 import type { TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
+import { isSetupAvailableForSymbol, listTradeSetups } from '../setups/storage';
+import type { TradeSetupDefinition } from '../setups/types';
 
 const SIDE_OPTIONS: TradeSide[] = ['long', 'short'];
 const RESULT_OPTIONS: TradeResult[] = ['loss', 'win', 'breakeven'];
@@ -37,6 +39,7 @@ interface TraderJournalModalContentProps {
 interface TradeFormState {
 	symbol: string;
 	planId: string;
+	setupId: string;
 	side: TradeSide;
 	setup: string;
 	timeframe: string;
@@ -66,6 +69,8 @@ function TraderJournalModalContent({
 	const [isSaving, setIsSaving] = useState(false);
 	const [isPastingImage, setIsPastingImage] = useState(false);
 	const [planOptions, setPlanOptions] = useState<TradePlanOption[]>([]);
+	const [setupOptions, setSetupOptions] = useState<TradeSetupDefinition[]>([]);
+	const [isLoadingSetups, setIsLoadingSetups] = useState(true);
 	const createdAttachmentPathsRef = useRef<Set<string>>(new Set());
 	const savedTradeRef = useRef(false);
 
@@ -85,6 +90,42 @@ function TraderJournalModalContent({
 	);
 	const liveResult = liveRr === null ? null : getTradeResultFromRr(liveRr);
 	const tr = getTranslator(plugin.settings.language);
+
+	useEffect(() => {
+		let disposed = false;
+		void listTradeSetups(plugin)
+			.then((setups) => {
+				if (disposed) {
+					return;
+				}
+
+				const initialSetupId = stringifyValue(initialTrade?.setup_id);
+				const initialSetupName = stringifyValue(initialTrade?.setup).toLocaleLowerCase();
+				const matchingSetup = initialSetupId
+					? setups.find((setup) => setup.id === initialSetupId)
+					: setups.find((setup) => setup.name.toLocaleLowerCase() === initialSetupName);
+				setSetupOptions(setups);
+				if (matchingSetup && !initialSetupId) {
+					setForm((currentForm) => ({
+						...currentForm,
+						setupId: currentForm.setupId || matchingSetup.id,
+						setup: currentForm.setupId ? currentForm.setup : matchingSetup.name,
+					}));
+				}
+			})
+			.catch((loadError: unknown) => {
+				console.error('Trader Journal failed to load trade setups', loadError);
+			})
+			.finally(() => {
+				if (!disposed) {
+					setIsLoadingSetups(false);
+				}
+			});
+
+		return () => {
+			disposed = true;
+		};
+	}, [initialTrade, plugin]);
 
 	useEffect(
 		() => () => {
@@ -140,6 +181,45 @@ function TraderJournalModalContent({
 				journalType === 'backtest'
 					? syncClosedAtDate(openedAt, currentForm.openedAt, currentForm.closedAt)
 					: currentForm.closedAt,
+		}));
+	}
+
+	function updateSymbol(symbol: string) {
+		setForm((currentForm) => {
+			const selectedSetup = setupOptions.find((setup) => setup.id === currentForm.setupId);
+			const keepHistoricalSetup =
+				isEditing &&
+				normalizeSymbol(symbol) === normalizeSymbol(stringifyValue(initialTrade?.symbol)) &&
+				currentForm.setupId === stringifyValue(initialTrade?.setup_id);
+			if (!selectedSetup || isSetupAvailableForSymbol(selectedSetup, symbol) || keepHistoricalSetup) {
+				return { ...currentForm, symbol };
+			}
+
+			return { ...currentForm, symbol, planId: '', setupId: '', setup: '' };
+		});
+	}
+
+	function updatePlan(planId: string) {
+		const plan = planOptions.find((option) => option.id === planId);
+		const matchingSetup = plan?.setupId
+			? setupOptions.find((setup) => setup.id === plan.setupId)
+			: setupOptions.find(
+					(setup) => setup.name.toLocaleLowerCase() === plan?.setup.toLocaleLowerCase(),
+				);
+		setForm((currentForm) => ({
+			...currentForm,
+			planId,
+			setupId: plan ? matchingSetup?.id ?? plan.setupId : currentForm.setupId,
+			setup: plan ? matchingSetup?.name ?? plan.setup : currentForm.setup,
+		}));
+	}
+
+	function updateSetup(setupId: string) {
+		const setup = setupOptions.find((option) => option.id === setupId);
+		setForm((currentForm) => ({
+			...currentForm,
+			setupId,
+			setup: setup?.name ?? '',
 		}));
 	}
 
@@ -261,6 +341,7 @@ function TraderJournalModalContent({
 			journal_type: journalType,
 			symbol,
 			side: form.side,
+			setup_id: form.setupId || undefined,
 			setup: form.setup.trim(),
 			timeframe: form.timeframe,
 			rr,
@@ -326,7 +407,7 @@ function TraderJournalModalContent({
 					<span>{tr('detail.symbol')}</span>
 					<select
 						value={form.symbol}
-						onChange={(event: ChangeEvent<HTMLSelectElement>) => updateField('symbol', event.target.value)}
+						onChange={(event: ChangeEvent<HTMLSelectElement>) => updateSymbol(event.target.value)}
 						required
 					>
 						<option value="">{tr('placeholder.selectSymbol')}</option>
@@ -343,7 +424,7 @@ function TraderJournalModalContent({
 						<span>{tr('detail.plan')}</span>
 						<select
 							value={form.planId}
-							onChange={(event: ChangeEvent<HTMLSelectElement>) => updateField('planId', event.target.value)}
+							onChange={(event: ChangeEvent<HTMLSelectElement>) => updatePlan(event.target.value)}
 						>
 							<option value="">{tr('placeholder.noPlan')}</option>
 							{planOptions.map((plan) => (
@@ -509,13 +590,27 @@ function TraderJournalModalContent({
 
 			<label className="trader-journal-field">
 				<span>{tr('detail.setup')}</span>
-				<input
-					type="text"
-					value={form.setup}
-					placeholder={tr('placeholder.openingRangeBreakout')}
-					onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('setup', event.target.value)}
+				<select
+					value={form.setupId}
+					onChange={(event: ChangeEvent<HTMLSelectElement>) => updateSetup(event.target.value)}
+					disabled={isLoadingSetups || (isLiveJournal && Boolean(form.planId))}
 					required
-				/>
+				>
+					<option value="">
+						{isLoadingSetups ? tr('placeholder.loadingSetups') : tr('placeholder.selectSetup')}
+					</option>
+					{setupOptions
+						.filter(
+							(setup) =>
+								(setup.status === 'active' || setup.id === form.setupId) &&
+								(isSetupAvailableForSymbol(setup, form.symbol) || setup.id === form.setupId),
+						)
+						.map((setup) => (
+						<option value={setup.id} key={setup.id}>
+							{setup.name}{setup.status === 'archived' ? ` (${tr('option.archived')})` : ''}
+						</option>
+						))}
+				</select>
 			</label>
 
 			{isLiveJournal ? null : (
@@ -637,6 +732,7 @@ function createInitialForm(
 	return {
 		symbol: stringifyValue(initialTrade?.symbol) || plugin.settings.symbols[0] || '',
 		planId: stringifyValue(initialTrade?.plan_id),
+		setupId: stringifyValue(initialTrade?.setup_id),
 		side: initialTrade?.side === 'short' ? 'short' : 'long',
 		setup: stringifyValue(initialTrade?.setup),
 		timeframe: stringifyValue(initialTrade?.timeframe) || plugin.settings.timeframes[0] || '',
@@ -701,7 +797,7 @@ function validateForm(form: TradeFormState, journalType: TradeJournalType, tr: T
 		return tr('error.timeframeRequired');
 	}
 
-	if (!form.setup.trim()) {
+	if (!form.setupId || !form.setup.trim()) {
 		return tr('error.setupRequired');
 	}
 

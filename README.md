@@ -1,137 +1,336 @@
 # Trader Journal
 
-Trader Journal is an Obsidian plugin for recording backtest and live trades in Markdown notes. It stores one daily journal file per symbol and renders each trade JSON block as a readable card in Reading View.
+Trader Journal is a local-first Obsidian plugin for planning trades, recording live and backtest executions, and reviewing performance without moving trading data outside the vault.
+
+The plugin organizes the workflow around three connected records:
+
+```text
+Setup → Plan → Live trade
+   └────────→ Backtest trade
+```
+
+- A **setup** is a reusable trading definition stored as a normal Markdown note.
+- A **plan** applies a setup to a symbol, date range, bias, and current market context.
+- A **trade** records an actual live or backtest execution.
+
+Trader Journal adds Obsidian wikilinks and tags to these notes, so their relationships can also be explored in Graph view.
 
 ## Features
 
-- Add backtest trades from an Obsidian modal.
-- Add live trades from a separate modal flow.
-- Open a responsive trading dashboard with performance metrics, attention indicators, recent trades, active-plan cards, and plan execution statistics.
-- Open a sidebar calendar with filter-specific trade, plan, and economic-event indicators.
-- Show this week's economic events alongside trades, filtered by country/currency and impact.
-- Edit live trades from the sidebar calendar or rendered Markdown cards.
-- Store one file per symbol per day.
-- Configure journal folder, symbols, and timeframes in settings.
-- Track side, setup, timeframe, result, RR, tags, images, notes, opened time, closed time, and holding time.
-- Track live entry price, stop loss, take profit, open/closed status, exit price, and auto-calculated RR.
-- Auto-calculate holding time from opened and closed timestamps.
-- Paste image files directly into the Images input; unsaved pasted images are moved to trash if the modal closes without saving.
-- Render trade JSON blocks as cards in Reading View.
-- Optionally select a rendered image to open a full-screen image preview.
-- Recalculate daily statistics automatically when a journal note changes.
-- Recalculate the active note manually with the command **Recalculate current stats**.
+### Trade setups
 
-## Storage Layout
+- Create reusable setup notes with an automatically generated stable ID.
+- Define the setup name, status, applicable symbols, and timeframes in a modal.
+- Complete the detailed definition manually in Markdown.
+- Choose existing setups when creating plans, live trades, or backtest trades.
+- Archive setups without removing them from historical records.
+- View active and archived setups from the dashboard.
 
-Journal files are created under the configured backtest or live journal folder. For new trades, the daily file date (`journalDate`) is derived from the date portion of `opened_at` and is treated as the actual trade date throughout the dashboard and calendar.
+### Trade plans
 
-```text
-Trading/Backtests/
-  BTC/
-    2026/
-      06/
-        2026-06-15.md
-  _attachments/
-Trading/Live/
-  BTC/
-    2026/
-      06/
-        2026-06-15.md
-  _attachments/
+- Create live trade plans for a symbol and date range.
+- Track plan status, directional bias, setup, timeframes, entry criteria, invalidation, take-profit plan, risk notes, images, and general notes.
+- Populate plan fields from the selected setup definition.
+- Keep a snapshot of the applied setup so later setup edits do not silently rewrite historical plans.
+- Link live trades back to their originating plan.
+
+### Live and backtest journals
+
+- Record live and backtest trades through dedicated modal flows.
+- Store one daily journal note per symbol.
+- Select setups from the setup library instead of entering inconsistent free text.
+- Automatically use and lock the plan setup when a live trade is linked to a plan.
+- Track side, timeframe, result, RR, prices, images, notes, timestamps, and holding time.
+- Calculate live-trade RR from entry, stop-loss, take-profit, or exit prices.
+- Derive live trade status from the closing timestamp.
+- Regenerate daily summaries and statistics from the stored trade blocks.
+
+### Dashboard and calendar
+
+- Review performance metrics, attention indicators, and recent trades in the dashboard.
+- View reusable setups in the right dashboard column above the plan overview.
+- Review active plans, plan execution rate, and plans without linked trades.
+- Open setup, plan, and trade notes directly from dashboard cards.
+- Browse trades and plans in a month or horizontal sidebar calendar.
+- Optionally display weekly economic events filtered by country/currency, impact, and time zone.
+
+### Images and local data
+
+- Paste image files directly into trade and plan modals.
+- Store pasted images inside the vault.
+- Move unsaved pasted images to trash when a modal closes without saving.
+- Optionally open rendered images in a full-screen preview.
+- Keep external image previews disabled by default.
+
+## Recommended workflow
+
+1. Run **Trader Journal: Add trade setup**.
+2. Enter the setup name, status, and timeframes.
+3. Complete the generated setup note in Markdown.
+4. Run **Trader Journal: Add trade plan** and select the setup.
+5. Adjust the setup snapshot for the current market context and save the plan.
+6. Add a live trade and select the plan, or add a backtest trade and select the setup directly.
+7. Review the results in **Trader Journal: Open trading dashboard**, the trade calendar, or Obsidian Graph view.
+
+## Commands
+
+Open the Obsidian Command palette and search for `Trader Journal`.
+
+| Command | Command ID | Description |
+| --- | --- | --- |
+| **Add backtest trade** | `add-backtest-trade` | Opens the backtest trade modal. |
+| **Add live trade** | `add-live-trade` | Opens the live trade modal. |
+| **Add trade plan** | `add-trade-plan` | Creates a plan from an existing setup or opens the setup creation flow when needed. |
+| **Add trade setup** | `add-trade-setup` | Creates the basic setup note and opens it for manual Markdown editing. |
+| **Open trading dashboard** | `open-dashboard` | Opens the dashboard in a workspace tab. |
+| **Open trade calendar** | `open-trade-calendar` | Opens the trade calendar sidebar. |
+| **Recalculate current stats** | `recalculate-current-journal-stats` | Rebuilds summary statistics and Graph metadata for the active journal note. |
+
+Command IDs are stable and can be used when assigning Obsidian hotkeys.
+
+## Setup notes
+
+The default setup folder is `Trading/_setups`. The plugin creates a note with basic frontmatter and empty detail sections:
+
+```yaml
+---
+type: trader-journal-setup
+tags:
+  - trader-journal-setup
+setupId: setup-opening-range-breakout
+name: Opening range breakout
+status: active
+symbols:
+  - NQ
+  - ES
+timeframes:
+  - 1m
+  - 5m
+updatedAt: 2026-08-13T10:30:00+07:00
+---
 ```
 
-The path format is:
+```markdown
+# Opening range breakout
+
+## Description
+
+## Entry criteria
+
+## Invalidation
+
+## Take profit
+
+## Risk rules
+```
+
+The setup note is the source of truth. Complete the sections manually using normal Markdown. Keep the generated `setupId` stable because plans and trades use it for internal relationships.
+
+The optional `symbols` list controls where the setup appears. A setup with `symbols: [NQ, ES]` is offered only after selecting NQ or ES in plan, live-trade, and backtest modals. Omitting `symbols` or using an empty list makes the setup available for every symbol.
+
+The section headings are structural. Keep their spelling unchanged so the plugin can read their contents when applying a setup to a plan.
+
+## Plans and setup snapshots
+
+Selecting a setup in the plan modal copies these values into the plan:
+
+- Setup name and ID.
+- Timeframes.
+- **Entry criteria** → entry plan.
+- **Invalidation** → invalidation.
+- **Take profit** → take-profit plan.
+- **Risk rules** → risk notes.
+
+The copied values remain editable in the plan. A plan stores both `setup_id` and a snapshot of the applied content. Editing the setup note later affects newly created plans but does not automatically alter previously saved plans.
+
+Plans are stored under the configured plan folder using this layout:
+
+```text
+Trading/Live/_plans/{symbol}/{year}/{month}/{date}-{symbol}-{title}.md
+```
+
+## Journal storage
+
+Daily journals are stored under their configured backtest or live root:
+
+```text
+Trading/
+  _setups/
+    opening-range-breakout.md
+  Backtests/
+    NQ/
+      2026/
+        08/
+          2026-08-13.md
+    _attachments/
+  Live/
+    _plans/
+      NQ/
+        2026/
+          08/
+            2026-08-13-NQ-opening-range-plan.md
+    NQ/
+      2026/
+        08/
+          2026-08-13.md
+    _attachments/
+```
+
+The daily journal path format is:
 
 ```text
 {journalFolder}/{symbol}/{year}/{month}/{date}.md
 ```
 
-Example:
+The daily file date comes from the date portion of `opened_at` and is treated as the actual trade date throughout the dashboard and calendar.
 
-```text
-Trading/Backtests/BTC/2026/06/2026-06-15.md
-Trading/Live/BTC/2026/06/2026-06-15.md
-```
+## Trade blocks
 
-## Trade Blocks
-
-Trades are stored as fenced JSON code blocks:
+Trades are stored in fenced JSON blocks. The JSON block is the source of truth for a trade.
 
 ````markdown
 ```trader-journal-trade
 {
 	"schemaVersion": 1,
-	"id": "20260412234400-BTC-a1b2c3",
-	"date": "2026-06-15T10:06:00+07:00",
+	"id": "20260813093000-NQ-a1b2c3",
+	"date": "2026-08-13T09:30:00+07:00",
 	"journal_type": "backtest",
-	"symbol": "BTC",
+	"setup_id": "setup-opening-range-breakout",
+	"symbol": "NQ",
 	"side": "long",
-	"setup": "Breakout",
+	"setup": "Opening range breakout",
 	"timeframe": "1m",
 	"result": "win",
-	"rr": 1,
+	"rr": 2,
 	"tags": ["trend"],
-	"images": [
-		{
-			"type": "file",
-			"value": "Trading/Backtests/_attachments/BTC-20260615-102030-a1b2c3.png"
-		}
-	],
-	"notes": "Followed the plan.",
-	"opened_at": "2026-06-15T09:30:00+07:00",
-	"closed_at": "2026-06-15T10:05:00+07:00",
-	"holding_time": 35
+	"images": [],
+	"notes": "Followed the setup.",
+	"opened_at": "2026-08-13T09:30:00+07:00",
+	"closed_at": "2026-08-13T09:45:00+07:00",
+	"holding_time": 15
 }
 ```
 ````
 
-The JSON block is the source of truth. The `date` field stores when the trade entry was created and is used to sort items inside a calendar day. The summary table and frontmatter statistics are regenerated from the trade blocks. Invalid trade JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` so they are not silently hidden from the daily stats.
+The generated summary table and frontmatter statistics are rebuilt from these blocks. Invalid JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` instead of being silently excluded.
 
-Live trade RR is calculated automatically from actual risk. While a trade is open, the calculation uses `take_profit` as the target price. Once the trade is closed, it uses `exit_price` instead. For long trades the formula is `(target_price - entry_price) / (entry_price - stop_loss)`. For short trades it is `(entry_price - target_price) / (stop_loss - entry_price)`. Closed live trade results are derived from the calculated RR: positive is a win, negative is a loss, and zero is breakeven.
+Backtest daily note properties also include `backtest_start_date` and `backtest_end_date`, which can be completed manually to record the tested data range.
 
-Live trade status is derived from `closed_at`: a blank value means `open`, while setting a closing time makes the trade `closed`.
+## Live trade calculations
 
-Open live trades are included in total trade counts, but excluded from win rate, net RR, average RR, best RR, and worst RR until they are closed.
+While a live trade is open, RR uses `take_profit` as the target. Once the trade is closed, it uses `exit_price`.
 
-Backtest daily note properties include `backtest_start_date` and `backtest_end_date` with empty values so users can manually record the date range of the backtested data.
+```text
+Long:  (target - entry) / (entry - stop loss)
+Short: (entry - target) / (stop loss - entry)
+```
 
-## Commands
+Closed trade results are derived from RR:
 
-- **Add backtest trade**: Opens the trade entry modal.
-- **Add live trade**: Opens the live trade entry modal.
-- **Open trading dashboard**: Opens the main dashboard in a workspace tab.
-- **Open trade calendar**: Opens the sidebar calendar view.
-- **Recalculate current stats**: Rebuilds the summary and frontmatter statistics for the active journal note.
+- Positive RR → win.
+- Negative RR → loss.
+- Zero RR → breakeven.
+
+A blank `closed_at` means the live trade is open. Open live trades are included in total trade counts but excluded from outcome statistics until closed.
+
+## Graph view
+
+Trader Journal writes real Obsidian wikilinks into frontmatter so Graph view can display setup, plan, and journal relationships:
+
+```text
+Setup ↔ Plan ↔ Live journal
+Setup ↔ Backtest journal
+```
+
+Examples:
+
+```yaml
+# Plan note
+setupLink: "[[Trading/_setups/opening-range-breakout]]"
+
+# Live or backtest daily note
+setupLinks:
+  - "[[Trading/_setups/opening-range-breakout]]"
+
+# Live daily note
+planLinks:
+  - "[[Trading/Live/_plans/NQ/2026/08/2026-08-13-NQ-opening-range-plan]]"
+```
+
+The plugin also adds a tag matching each generated note type:
+
+| Note type | Graph tag |
+| --- | --- |
+| Setup | `#trader-journal-setup` |
+| Plan | `#trader-journal-live-plan` |
+| Live daily journal | `#trader-journal-live-symbol-day` |
+| Backtest daily journal | `#trader-journal-symbol-day` |
+
+Use Graph view filters such as:
+
+```text
+tag:#trader-journal-setup
+tag:#trader-journal-live-plan
+tag:#trader-journal-live-symbol-day
+tag:#trader-journal-symbol-day
+```
+
+Existing plugin notes missing their type tag are updated after the workspace is ready. User-created tags are preserved.
 
 ## Settings
 
-- **Backtest journal folder**: Root folder for generated backtest journal files.
-- **Live journal folder**: Root folder for generated live journal files.
-- **Economic event filters**: Optionally show every event returned for the source week without time, country/currency, or impact filters.
-- **Symbols**: Symbols shown in the trade modal.
-- **Timeframes**: Timeframes shown in the trade modal.
-- **Calendar display**: Chooses the month grid or horizontal calendar layout in the sidebar.
-- **Remote images**: Allows image previews from external URLs. This is disabled by default.
-- **Image preview modal**: Controls whether selecting an image in a rendered trade or plan block opens the large preview.
-- **Economic calendar**: Enables loading this week's events from Faireconomy. This is disabled by default.
-- **Economic calendar time zone**: Controls how economic event dates and times are displayed. Defaults to `Asia/Ho_Chi_Minh`.
-- **Countries and currencies**: Only matching event codes such as `USD`, `EUR`, or `GBP` are shown.
-- **News impact**: Chooses which `High`, `Medium`, `Low`, and `Holiday` events are shown.
+Open **Settings → Trader Journal**.
 
-## Privacy
+| Setting | Description |
+| --- | --- |
+| **Language** | Selects English or Vietnamese for the plugin interface. |
+| **Backtest journal folder** | Root folder for generated backtest daily notes. |
+| **Live journal folder** | Root folder for generated live daily notes. |
+| **Trade plan folder** | Root folder for live trade plan notes. |
+| **Trade setup folder** | Root folder for reusable setup notes. |
+| **Symbols** | Symbols available in trade and plan modals. |
+| **Timeframes** | Timeframes available in trade and setup modals. |
+| **Calendar display** | Selects the month grid or horizontal calendar. |
+| **Remote images** | Allows previews from external image URLs. Disabled by default. |
+| **Image preview modal** | Controls full-screen preview when selecting rendered images. |
+| **Economic calendar** | Enables weekly economic-event requests. Disabled by default. |
+| **Economic calendar time zone** | Controls event grouping and displayed times. |
+| **Countries and currencies** | Filters events by codes such as `USD`, `EUR`, or `GBP`. |
+| **News impact** | Filters `High`, `Medium`, `Low`, and `Holiday` events. |
 
-Trader Journal works locally by default and does not collect analytics or telemetry. Pasted images are saved inside the vault under `_attachments`; if you close the trade modal without saving, temporary pasted images are moved to trash.
+## Installation
 
-Remote image previews are disabled by default. If you enable **Remote images**, opening notes with external image URLs may send requests to those image hosts.
+### Manual installation
 
-The economic calendar is disabled by default. If you enable it, the plugin requests
-`https://nfs.faireconomy.media/ff_calendar_thisweek.json`. The request does not include vault content,
-filenames, account information, or telemetry. A successful response is stored in the plugin's `data.json`
-for the source calendar week. The plugin only requests the endpoint when there is no cached response for
-the current source week; changing filters or the display time zone does not trigger another request. Failed
-requests are subject to a persisted five-minute cooldown before another attempt can be made.
+1. Create `.obsidian/plugins/trader-journal/` inside the vault.
+2. Copy `manifest.json`, `main.js`, and `styles.css` into that folder.
+3. Reload Obsidian.
+4. Open **Settings → Community plugins** and enable **Trader Journal**.
+
+The plugin requires Obsidian `1.6.6` or newer and is not desktop-only.
+
+## Privacy and network access
+
+Trader Journal works locally by default and does not collect analytics or telemetry. Journal content, filenames, setup definitions, plans, and images are not transmitted by the plugin.
+
+Pasted images are stored inside the vault. Temporary pasted images are moved to trash when their modal closes without saving.
+
+Remote image previews are disabled by default. Enabling **Remote images** allows requests to image hosts referenced by the user.
+
+The economic calendar is also disabled by default. When enabled, the plugin requests:
+
+```text
+https://nfs.faireconomy.media/ff_calendar_thisweek.json
+```
+
+The request does not include vault content, filenames, account information, or telemetry. Successful responses are cached in the plugin's `data.json` for the source week. Failed requests use a persisted five-minute cooldown before another attempt.
 
 ## Development
+
+Requirements:
+
+- Current Node.js LTS, Node 18 or newer.
+- npm.
 
 Install dependencies:
 
@@ -139,30 +338,38 @@ Install dependencies:
 npm install
 ```
 
-Run development build in watch mode:
+Run the development watcher:
 
 ```bash
 npm run dev
 ```
 
-Run production build:
+Create and validate a production bundle:
 
 ```bash
 npm run build
 ```
 
-Run lint:
+Run ESLint:
 
 ```bash
 npm run lint
 ```
 
-## Release Artifacts
+Validate the manifest:
 
-For an Obsidian plugin release, attach these files:
+```bash
+npm run validate
+```
+
+Source code lives in `src/`. The entry point is `src/main.ts`, and esbuild produces the bundled `main.js` at the plugin root.
+
+## Release artifacts
+
+Attach these individual files to an Obsidian plugin release:
 
 - `manifest.json`
 - `main.js`
 - `styles.css`
 
-The plugin ID is `trader-journal`. For local installation, place the release files in `.obsidian/plugins/trader-journal/`.
+The release tag must exactly match the version in `manifest.json` without a leading `v`. The plugin ID is `trader-journal` and must remain stable.

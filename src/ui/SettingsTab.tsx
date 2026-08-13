@@ -25,6 +25,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const [journalFolder, setJournalFolder] = useState(plugin.settings.journalFolder);
 	const [liveJournalFolder, setLiveJournalFolder] = useState(plugin.settings.liveJournalFolder);
 	const [planFolder, setPlanFolder] = useState(plugin.settings.planFolder);
+	const [setupFolder, setSetupFolder] = useState(plugin.settings.setupFolder);
 	const [symbols, setSymbols] = useState(plugin.settings.symbols);
 	const [newSymbol, setNewSymbol] = useState('');
 	const [timeframes, setTimeframes] = useState(plugin.settings.timeframes);
@@ -56,6 +57,12 @@ function SettingsView({ plugin }: SettingsViewProps) {
 	const savePlanFolder = (value: string) => {
 		setPlanFolder(value);
 		plugin.settings.planFolder = value;
+		void plugin.saveSettings();
+	};
+
+	const saveSetupFolder = (value: string) => {
+		setSetupFolder(value);
+		plugin.settings.setupFolder = value;
 		void plugin.saveSettings();
 	};
 
@@ -195,6 +202,17 @@ function SettingsView({ plugin }: SettingsViewProps) {
 					placeholder="Trading/Live/_plans"
 					onChange={(event: ChangeEvent<HTMLInputElement>) => savePlanFolder(event.target.value)}
 					onBlur={() => plugin.journalDataService.refreshIfStarted()}
+				/>
+			</label>
+
+			<label className="trader-journal-setting">
+				<span className="trader-journal-setting__label">{tr('settings.setupFolderLabel')}</span>
+				<span className="trader-journal-setting__description">{tr('settings.setupFolderDescription')}</span>
+				<input
+					type="text"
+					value={setupFolder}
+					placeholder="Trading/_setups"
+					onChange={(event: ChangeEvent<HTMLInputElement>) => saveSetupFolder(event.target.value)}
 				/>
 			</label>
 
@@ -341,6 +359,7 @@ export class TraderJournalSettingTab extends PluginSettingTab {
 					tr('settings.backtestFolderLabel'),
 					tr('settings.liveFolderLabel'),
 					tr('settings.planFolderLabel'),
+					tr('settings.setupFolderLabel'),
 					tr('settings.remoteImagesLabel'),
 					tr('settings.imageModalLabel'),
 					tr('settings.calendarDisplayLabel'),

@@ -6,6 +6,7 @@ import type { TraderJournalLanguage } from '../settings';
 import { TradePlanModal } from '../ui/TradePlanModal';
 import { getOpenPlans, getPlanMetrics } from './dashboardStats';
 import { DashboardIconButton } from './DashboardIconButton';
+import type { KeyboardEvent, MouseEvent } from 'react';
 
 interface PlanOverviewProps {
 	language: TraderJournalLanguage;
@@ -106,9 +107,26 @@ function OpenPlanCard({
 			new Notice(tr('calendar.openPlanNoteError'));
 		}
 	};
+	const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+		if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) {
+			return;
+		}
+
+		event.preventDefault();
+		void openPlan();
+	};
+	const stopCardClick = (event: MouseEvent<HTMLDivElement>) => {
+		event.stopPropagation();
+	};
 
 	return (
-		<article className={`trader-journal-dashboard-plan-card${plan.linkedTradeCount === 0 ? ' trader-journal-dashboard-plan-card--attention' : ''}`}>
+		<article
+			className={`trader-journal-dashboard-plan-card${plan.linkedTradeCount === 0 ? ' trader-journal-dashboard-plan-card--attention' : ''}`}
+			role="button"
+			tabIndex={0}
+			onClick={() => void openPlan()}
+			onKeyDown={handleCardKeyDown}
+		>
 			<div className="trader-journal-dashboard-plan-card__header">
 				<div>
 					<div className="trader-journal-dashboard-plan-card__identity">
@@ -132,13 +150,7 @@ function OpenPlanCard({
 						? tr('dashboard.noLinkedTrades')
 						: tr('calendar.linkedTradeCount', { count: plan.linkedTradeCount })}
 				</span>
-				<div className="trader-journal-dashboard-plan-card__actions">
-					<DashboardIconButton
-						icon="file-text"
-						label={tr('dashboard.openNote')}
-						size="compact"
-						onClick={() => void openPlan()}
-					/>
+				<div className="trader-journal-dashboard-plan-card__actions" onClick={stopCardClick}>
 					<DashboardIconButton
 						icon="pencil"
 						label={tr('dashboard.editPlan')}

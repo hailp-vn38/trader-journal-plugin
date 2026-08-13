@@ -177,6 +177,54 @@
 	width: 100%;
 }
 
+.trader-journal-setup-select-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.trader-journal-setup-select-row select {
+	flex: 1;
+	min-width: 0;
+}
+
+.trader-journal-setup-select-row button {
+	flex: 0 0 auto;
+}
+
+.trader-journal-setup-symbols {
+	margin: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 10px 12px;
+}
+
+.trader-journal-setup-symbols legend {
+	padding: 0 4px;
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+}
+
+.trader-journal-setup-symbols__options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 14px;
+}
+
+.trader-journal-setup-symbols__options label {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.trader-journal-setup-symbols__options input {
+	width: auto;
+}
+
+.trader-journal-setup-symbols small {
+	color: var(--text-muted);
+}
+
 .trader-journal-field textarea {
 	resize: vertical;
 }
@@ -379,6 +427,26 @@
 .trader-journal-plan-linked-trades__list {
 	margin: 6px 0 0;
 	padding-left: 18px;
+}
+
+button.trader-journal-plan-linked-trade-button {
+	max-width: 100%;
+	height: auto;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-accent);
+	padding: 2px 0;
+	text-align: left;
+	white-space: normal;
+}
+
+button.trader-journal-plan-linked-trade-button:hover,
+button.trader-journal-plan-linked-trade-button:focus-visible {
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-accent-hover);
+	text-decoration: underline;
 }
 
 .trader-journal-trade-card__header {
@@ -1617,6 +1685,12 @@ button.trader-journal-dashboard-icon-button--compact {
 	min-width: 0;
 }
 
+.trader-journal-dashboard__right-column {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
 .trader-journal-dashboard__panel {
 	min-width: 0;
 	padding: 16px;
@@ -1645,9 +1719,9 @@ button.trader-journal-dashboard-icon-button--compact {
 	gap: 6px;
 }
 
-button.trader-journal-dashboard-row {
+.trader-journal-dashboard-row {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) auto auto;
 	align-items: center;
 	gap: 12px;
 	width: 100%;
@@ -1659,14 +1733,16 @@ button.trader-journal-dashboard-row {
 	background: transparent;
 	box-shadow: none;
 	color: var(--text-normal);
+	cursor: pointer;
 	text-align: left;
 }
 
-button.trader-journal-dashboard-row:hover,
-button.trader-journal-dashboard-row:focus-visible {
+.trader-journal-dashboard-row:hover,
+.trader-journal-dashboard-row:focus-visible {
 	border-color: var(--background-modifier-border);
 	background: var(--background-modifier-hover);
 	box-shadow: none;
+	outline: none;
 }
 
 .trader-journal-dashboard-row__primary,
@@ -1695,6 +1771,12 @@ button.trader-journal-dashboard-row:focus-visible {
 	color: var(--text-normal);
 	font-variant-numeric: tabular-nums;
 	font-weight: 600;
+}
+
+.trader-journal-dashboard-row__actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
 }
 
 .trader-journal-dashboard-row__result--win {
@@ -1785,6 +1867,106 @@ button.trader-journal-dashboard-row:focus-visible {
 	gap: 14px;
 }
 
+.trader-journal-dashboard__setup-overview {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.trader-journal-dashboard__setup-metrics {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.trader-journal-dashboard-setup-metric {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 10px;
+	border-radius: 7px;
+	background: var(--background-primary-alt);
+}
+
+.trader-journal-dashboard-setup-metric strong {
+	font-size: 1.15rem;
+}
+
+.trader-journal-dashboard-setup-metric span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-dashboard__setup-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 280px;
+	overflow-y: auto;
+}
+
+.trader-journal-dashboard-setup-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+button.trader-journal-dashboard-setup-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex: 1;
+	width: auto;
+	height: auto;
+	padding: 10px;
+	border: 1px solid transparent;
+	border-radius: 7px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-align: left;
+}
+
+button.trader-journal-dashboard-setup-row:hover,
+button.trader-journal-dashboard-setup-row:focus-visible {
+	border-color: var(--background-modifier-border);
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+}
+
+.trader-journal-dashboard-setup-row__identity {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.trader-journal-dashboard-setup-row__identity strong,
+.trader-journal-dashboard-setup-row__identity span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trader-journal-dashboard-setup-row__identity span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-dashboard-setup-row__status {
+	flex: 0 0 auto;
+	padding: 2px 7px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-dashboard-setup-row__status--archived {
+	color: var(--text-muted);
+}
+
 .trader-journal-dashboard__plan-metrics {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(90px, 100%), 1fr));
@@ -1870,6 +2052,14 @@ button.trader-journal-dashboard-row:focus-visible {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 9px;
 	background: var(--background-primary);
+	cursor: pointer;
+}
+
+.trader-journal-dashboard-plan-card:hover,
+.trader-journal-dashboard-plan-card:focus-visible {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+	outline: none;
 }
 
 .trader-journal-dashboard-plan-card--attention {
@@ -1967,7 +2157,7 @@ button.trader-journal-dashboard-row:focus-visible {
 		padding: 12px;
 	}
 
-	button.trader-journal-dashboard-row {
+	.trader-journal-dashboard-row {
 		grid-template-columns: 1fr;
 		gap: 5px;
 	}
@@ -2002,7 +2192,7 @@ button.trader-journal-dashboard-row:focus-visible {
 		padding: 12px;
 	}
 
-	button.trader-journal-dashboard-row {
+	.trader-journal-dashboard-row {
 		grid-template-columns: 1fr;
 		gap: 5px;
 	}

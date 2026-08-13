@@ -21,7 +21,9 @@ export interface TradePlanEntry {
 	start_date?: string;
 	end_date?: string | null;
 	bias?: TradePlanBias;
+	setup_id?: string;
 	setup?: string;
+	setup_updated_at?: string;
 	timeframes?: string[] | string;
 	entry_plan?: string;
 	invalidation?: string;
@@ -43,4 +45,6 @@ export interface TradePlanOption {
 	startDate: string;
 	endDate: string | null;
 	filePath: string;
+	setupId: string;
+	setup: string;
 }

@@ -1,4 +1,4 @@
-import { MarkdownRenderChild, Modal, normalizePath, setIcon, TFile } from 'obsidian';
+import { MarkdownRenderChild, Modal, normalizePath, Notice, setIcon, TFile } from 'obsidian';
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { getTranslator } from '../i18n';
@@ -43,7 +43,7 @@ function renderPlanBlock(
 	renderDetails(plugin, cardEl, plan);
 	renderTextSections(plugin, cardEl, plan);
 	renderImages(plugin, cardEl, plan, ctx);
-	renderLinkedTrades(plugin, cardEl, plan);
+	renderLinkedTrades(plugin, cardEl, plan, ctx);
 }
 
 function renderPlanError(el: HTMLElement, message: string, title: string): void {
@@ -228,7 +228,12 @@ function renderImage(
 	);
 }
 
-function renderLinkedTrades(plugin: TraderJournalPlugin, parentEl: HTMLElement, plan: TradePlanEntry): void {
+function renderLinkedTrades(
+	plugin: TraderJournalPlugin,
+	parentEl: HTMLElement,
+	plan: TradePlanEntry,
+	ctx: MarkdownPostProcessorContext,
+): void {
 	const linkedTrades = normalizeLinkedTrades(plan.linked_trades);
 	if (linkedTrades.length === 0) {
 		return;
@@ -242,9 +247,42 @@ function renderLinkedTrades(plugin: TraderJournalPlugin, parentEl: HTMLElement, 
 
 	const listEl = sectionEl.createEl('ul', { cls: 'trader-journal-plan-linked-trades__list' });
 	for (const tradeRef of linkedTrades) {
-		listEl.createEl('li', {
-			text: tradeRef.label || tradeRef.trade_id || tradeRef.file_path || '',
+		const itemEl = listEl.createEl('li');
+		const label = tradeRef.label || tradeRef.trade_id || tradeRef.file_path || '';
+		const filePath = stringifyValue(tradeRef.file_path);
+		if (!filePath) {
+			itemEl.setText(label);
+			continue;
+		}
+
+		const buttonEl = itemEl.createEl('button', {
+			cls: 'trader-journal-plan-linked-trade-button',
+			text: label,
+			attr: {
+				type: 'button',
+				title: label,
+			},
 		});
+		const child = new MarkdownRenderChild(buttonEl);
+		child.registerDomEvent(buttonEl, 'click', (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			void openLinkedTrade(plugin, filePath, ctx.sourcePath);
+		});
+		ctx.addChild(child);
+	}
+}
+
+async function openLinkedTrade(
+	plugin: TraderJournalPlugin,
+	filePath: string,
+	sourcePath: string,
+): Promise<void> {
+	try {
+		await plugin.app.workspace.openLinkText(filePath, sourcePath, false);
+	} catch (error) {
+		console.error('Trader Journal failed to open linked trade', error);
+		new Notice(getTranslator(plugin.settings.language)('calendar.openTradeNoteError'));
 	}
 }
 

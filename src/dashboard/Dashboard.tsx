@@ -1,6 +1,7 @@
 import type { Events } from 'obsidian';
 import { Notice } from 'obsidian';
 import { useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import type TraderJournalPlugin from '../main';
 import { getLocale, getTranslator } from '../i18n';
 import { LANGUAGE_CHANGE_EVENT, type TraderJournalLanguage } from '../settings';
@@ -19,6 +20,7 @@ import {
 } from './dashboardStats';
 import { PlanOverview } from './PlanOverview';
 import { DashboardIconButton } from './DashboardIconButton';
+import { SetupOverview } from './SetupOverview';
 
 interface DashboardProps {
 	plugin: TraderJournalPlugin;
@@ -159,12 +161,15 @@ export function Dashboard({ plugin }: DashboardProps) {
 					) : <p className="trader-journal-dashboard__empty">{tr('dashboard.emptyTrades')}</p>}
 				</section>
 
-				<PlanOverview
-					language={language}
-					plugin={plugin}
-					snapshot={journalData.plans}
-					symbol={symbol}
-				/>
+				<div className="trader-journal-dashboard__right-column">
+					<SetupOverview language={language} plugin={plugin} />
+					<PlanOverview
+						language={language}
+						plugin={plugin}
+						snapshot={journalData.plans}
+						symbol={symbol}
+					/>
+				</div>
 			</div>
 		</div>
 	);
@@ -179,6 +184,7 @@ function AttentionCard({ label, value }: { label: string; value: number }) {
 }
 
 function RecentTradeRow({ trade, locale, plugin }: { trade: JournalCalendarTrade; locale: string | undefined; plugin: TraderJournalPlugin }) {
+	const tr = getTranslator(plugin.settings.language);
 	const openTrade = async () => {
 		try {
 			await plugin.app.workspace.openLinkText(trade.filePath, '', false);
@@ -187,17 +193,44 @@ function RecentTradeRow({ trade, locale, plugin }: { trade: JournalCalendarTrade
 			new Notice(getTranslator(plugin.settings.language)('calendar.openTradeNoteError'));
 		}
 	};
+	const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) {
+			return;
+		}
+
+		event.preventDefault();
+		void openTrade();
+	};
+	const stopRowClick = (event: MouseEvent<HTMLSpanElement>) => {
+		event.stopPropagation();
+	};
+	const tradeDescription = [trade.side, trade.setup].filter(Boolean).join(' · ') || '—';
+
 	return (
-		<button type="button" className="trader-journal-dashboard-row" onClick={() => void openTrade()}>
-			<span className="trader-journal-dashboard-row__primary"><strong>{trade.symbol}</strong><span>{trade.side || trade.setup || '—'}</span></span>
+		<div
+			className="trader-journal-dashboard-row"
+			role="button"
+			tabIndex={0}
+			onClick={() => void openTrade()}
+			onKeyDown={handleRowKeyDown}
+		>
+			<span className="trader-journal-dashboard-row__primary"><strong>{trade.symbol}</strong><span>{tradeDescription}</span></span>
 			<span className="trader-journal-dashboard-row__secondary">
 				<span>{formatJournalDate(trade.journalDate, locale)}</span>
 				<span className={`trader-journal-dashboard-row__result trader-journal-dashboard-row__result--${trade.resultKey ?? 'open'}`}>
-					{trade.status === 'open' ? getTranslator(plugin.settings.language)('option.open') : trade.result || '—'}
+					{trade.status === 'open' ? tr('option.open') : trade.result || '—'}
 				</span>
 				<span className="trader-journal-dashboard-row__rr">{trade.rr || '—'}</span>
 			</span>
-		</button>
+			<span className="trader-journal-dashboard-row__actions" onClick={stopRowClick}>
+				<DashboardIconButton
+					icon="pencil"
+					label={tr('dashboard.editTrade')}
+					size="compact"
+					onClick={() => new TraderJournalModal(plugin.app, plugin, trade.journalType, trade.trade, trade.filePath).open()}
+				/>
+			</span>
+		</div>
 	);
 }
 
