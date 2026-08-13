@@ -5,8 +5,8 @@ import { normalizeTradeImages, stringifyValue } from '../trades/format';
 import { splitFrontmatter } from '../trades/parser';
 import { extractPlans, getPlanRootFolder, isPotentialPlanFile, normalizeLinkedTrades, normalizePlanEndDate, normalizePlanStatus } from './storage';
 import type { TradePlanBias, TradePlanEntry, TradePlanStatus } from './types';
-
-const MAX_INDEXED_PLAN_DAYS = 730;
+import { isPathInFolder } from '../journal/pathScope';
+import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
 
 export interface JournalCalendarPlan {
 	id: string;
@@ -36,8 +36,6 @@ export interface JournalCalendarPlanDay {
 }
 
 export interface JournalPlanSnapshot {
-	daysByDate: Record<string, JournalCalendarPlanDay>;
-	dayDates: string[];
 	planCount: number;
 	plans: JournalCalendarPlan[];
 }
@@ -45,11 +43,18 @@ export interface JournalPlanSnapshot {
 interface JournalPlanFileEntry {
 	path: string;
 	plans: JournalCalendarPlan[];
+	fingerprint: string;
 }
+
+const EMPTY_JOURNAL_PLAN_SNAPSHOT: JournalPlanSnapshot = {
+	planCount: 0,
+	plans: [],
+};
 
 export class JournalPlanIndex {
 	private readonly plugin: TraderJournalPlugin;
 	private readonly entriesByPath = new Map<string, JournalPlanFileEntry>();
+	private snapshot = EMPTY_JOURNAL_PLAN_SNAPSHOT;
 
 	constructor(plugin: TraderJournalPlugin) {
 		this.plugin = plugin;
@@ -59,7 +64,9 @@ export class JournalPlanIndex {
 		this.entriesByPath.clear();
 
 		const files = getPlanFiles(this.plugin);
-		const entries = await Promise.all(files.map((file) => this.readFileEntry(file)));
+		const entries = await mapWithConcurrency(files, INDEX_READ_CONCURRENCY, async (file) =>
+			this.readFileEntry(file),
+		);
 
 		for (const entry of entries) {
 			if (entry) {
@@ -67,75 +74,70 @@ export class JournalPlanIndex {
 			}
 		}
 
-		return this.getSnapshot();
+		this.snapshot = this.buildSnapshot();
+		return this.snapshot;
 	}
 
-	async updateFile(file: TFile): Promise<JournalPlanSnapshot> {
-		this.entriesByPath.delete(file.path);
+	async updateFile(file: TFile): Promise<boolean> {
+		const previousEntry = this.entriesByPath.get(file.path) ?? null;
+		if (!isPotentialPlanFile(this.plugin, file)) {
+			return false;
+		}
 
-		if (isPotentialPlanFile(this.plugin, file)) {
-			const entry = await this.readFileEntry(file);
-			if (entry) {
-				this.entriesByPath.set(entry.path, entry);
+		const entry = await this.readFileEntry(file);
+		if (previousEntry?.fingerprint === entry?.fingerprint) {
+			return false;
+		}
+
+		if (entry) {
+			this.entriesByPath.set(entry.path, entry);
+		} else {
+			this.entriesByPath.delete(file.path);
+		}
+		this.snapshot = this.buildSnapshot();
+		return true;
+	}
+
+	removePath(path: string): boolean {
+		if (!this.entriesByPath.delete(path)) {
+			return false;
+		}
+
+		this.snapshot = this.buildSnapshot();
+		return true;
+	}
+
+	removePathPrefix(pathPrefix: string): boolean {
+		let changed = false;
+		for (const path of this.entriesByPath.keys()) {
+			if (isPathInFolder(path, pathPrefix)) {
+				this.entriesByPath.delete(path);
+				changed = true;
 			}
 		}
 
-		return this.getSnapshot();
-	}
+		if (!changed) {
+			return false;
+		}
 
-	removePath(path: string): JournalPlanSnapshot {
-		this.entriesByPath.delete(path);
-		return this.getSnapshot();
+		this.snapshot = this.buildSnapshot();
+		return true;
 	}
 
 	getSnapshot(): JournalPlanSnapshot {
-		const daysByDate: Record<string, JournalCalendarPlanDay> = {};
+		return this.snapshot;
+	}
+
+	private buildSnapshot(): JournalPlanSnapshot {
 		const plans: JournalCalendarPlan[] = [];
 
 		for (const entry of this.entriesByPath.values()) {
 			for (const plan of entry.plans) {
 				plans.push(plan);
-				for (const date of getPlanDisplayDates(plan)) {
-					const day =
-						daysByDate[date] ??
-						(daysByDate[date] = {
-							date,
-							openPlanCount: 0,
-							closedPlanCount: 0,
-							cancelledPlanCount: 0,
-							plans: [],
-						});
-
-					if (plan.status === 'closed') {
-						day.closedPlanCount += 1;
-					} else if (plan.status === 'cancelled') {
-						day.cancelledPlanCount += 1;
-					} else {
-						day.openPlanCount += 1;
-					}
-
-					day.plans.push(plan);
-				}
 			}
 		}
 
-		for (const day of Object.values(daysByDate)) {
-			day.plans.sort((firstPlan, secondPlan) => {
-				if (firstPlan.status !== secondPlan.status) {
-					return getPlanStatusSortValue(firstPlan.status) - getPlanStatusSortValue(secondPlan.status);
-				}
-
-				if (firstPlan.sortTime !== secondPlan.sortTime) {
-					return secondPlan.sortTime - firstPlan.sortTime;
-				}
-
-				return firstPlan.title.localeCompare(secondPlan.title);
-			});
-		}
-
 		return {
-			daysByDate,
-			dayDates: Object.keys(daysByDate).sort(),
 			planCount: plans.length,
 			plans: plans.sort((first, second) => second.sortTime - first.sortTime),
 		};
@@ -145,22 +147,30 @@ export class JournalPlanIndex {
 		try {
 			const content = await this.plugin.app.vault.cachedRead(file);
 			const { body } = splitFrontmatter(content);
-			const plans = extractPlans(body);
-			if (plans.length === 0) {
+			const extractedPlans = extractPlans(body);
+			if (extractedPlans.length === 0) {
 				return null;
 			}
+			const plans = extractedPlans
+				.map((plan, index) => createCalendarPlan(file, plan, index))
+				.filter((plan): plan is JournalCalendarPlan => plan !== null);
 
 			return {
 				path: file.path,
-				plans: plans
-					.map((plan, index) => createCalendarPlan(file, plan, index))
-					.filter((plan): plan is JournalCalendarPlan => plan !== null),
+				plans,
+				fingerprint: createPlanEntryFingerprint(plans),
 			};
 		} catch (error) {
 			console.error(`Trader Journal failed to index plan ${file.path}`, error);
 			return null;
 		}
 	}
+}
+
+function createPlanEntryFingerprint(plans: readonly JournalCalendarPlan[]): string {
+	return JSON.stringify(
+		plans.map(({ file: _file, ...plan }) => plan),
+	);
 }
 
 function createCalendarPlan(file: TFile, plan: TradePlanEntry, index: number): JournalCalendarPlan | null {
@@ -217,25 +227,74 @@ function collectPlanFiles(plugin: TraderJournalPlugin, folder: TFolder, files: T
 	}
 }
 
-function getPlanDisplayDates(plan: JournalCalendarPlan): string[] {
-	const startDate = parseDateKey(plan.startDate);
-	if (!startDate) {
-		return [];
+export function createPlanDaysForRange(
+	plans: readonly JournalCalendarPlan[],
+	rangeStart: string,
+	rangeEnd: string,
+	today = formatDateKey(new Date()),
+): Record<string, JournalCalendarPlanDay> {
+	if (!isDateKey(rangeStart) || !isDateKey(rangeEnd) || rangeEnd < rangeStart) {
+		return {};
 	}
 
-	const todayKey = formatDateKey(new Date());
-	const fallbackEndDate = plan.status === 'open' ? todayKey : plan.startDate;
-	const endDateKey = plan.endDate ?? fallbackEndDate;
-	const endDate = parseDateKey(endDateKey) ?? startDate;
-	const dates: string[] = [];
+	const daysByDate: Record<string, JournalCalendarPlanDay> = {};
+	for (const plan of plans) {
+		const effectiveEnd = getPlanEffectiveEndDate(plan, today);
+		const visibleStart = plan.startDate > rangeStart ? plan.startDate : rangeStart;
+		const visibleEnd = effectiveEnd < rangeEnd ? effectiveEnd : rangeEnd;
+		const startDate = parseDateKey(visibleStart);
+		const endDate = parseDateKey(visibleEnd);
+		if (!startDate || !endDate || startDate > endDate) {
+			continue;
+		}
 
-	for (let index = 0, date = new Date(startDate); date <= endDate && index < MAX_INDEXED_PLAN_DAYS; index += 1) {
-		dates.push(formatDateKey(date));
-		date = new Date(date);
-		date.setDate(date.getDate() + 1);
+		for (let date = startDate; date <= endDate; date = addLocalDays(date, 1)) {
+			const dateKey = formatDateKey(date);
+			const day =
+				daysByDate[dateKey] ??
+				(daysByDate[dateKey] = {
+					date: dateKey,
+					openPlanCount: 0,
+					closedPlanCount: 0,
+					cancelledPlanCount: 0,
+					plans: [],
+				});
+
+			if (plan.status === 'closed') {
+				day.closedPlanCount += 1;
+			} else if (plan.status === 'cancelled') {
+				day.cancelledPlanCount += 1;
+			} else {
+				day.openPlanCount += 1;
+			}
+			day.plans.push(plan);
+		}
 	}
 
-	return dates;
+	for (const day of Object.values(daysByDate)) {
+		day.plans.sort(comparePlansForDay);
+	}
+	return daysByDate;
+}
+
+export function getPlanEffectiveEndDate(plan: JournalCalendarPlan, today: string): string {
+	return plan.endDate ?? (plan.status === 'open' ? today : plan.startDate);
+}
+
+function addLocalDays(date: Date, days: number): Date {
+	const nextDate = new Date(date);
+	nextDate.setDate(nextDate.getDate() + days);
+	return nextDate;
+}
+
+function comparePlansForDay(firstPlan: JournalCalendarPlan, secondPlan: JournalCalendarPlan): number {
+	if (firstPlan.status !== secondPlan.status) {
+		return getPlanStatusSortValue(firstPlan.status) - getPlanStatusSortValue(secondPlan.status);
+	}
+	if (firstPlan.sortTime !== secondPlan.sortTime) {
+		return secondPlan.sortTime - firstPlan.sortTime;
+	}
+	return firstPlan.title.localeCompare(secondPlan.title);
 }
 
 function normalizePlanBias(value: unknown): TradePlanBias | null {

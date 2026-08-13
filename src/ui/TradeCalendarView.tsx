@@ -26,6 +26,8 @@ import {
 	type JournalCalendarTrade,
 } from '../trades/journalIndex';
 import {
+	createPlanDaysForRange,
+	getPlanEffectiveEndDate,
 	type JournalCalendarPlan,
 	type JournalCalendarPlanDay,
 	type JournalPlanSnapshot,
@@ -266,6 +268,15 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		() => filterSnapshotByJournalType(snapshot, journalTypeFilter),
 		[snapshot, journalTypeFilter],
 	);
+	const calendarDates = useMemo(() => getCalendarDates(visibleMonth), [visibleMonth]);
+	const horizontalCalendarDates = useMemo(() => getMonthDates(visibleMonth), [visibleMonth]);
+	const visiblePlanDates = calendarDisplayMode === 'horizontal_calendar' ? horizontalCalendarDates : calendarDates;
+	const visiblePlanRangeStart = visiblePlanDates[0]?.date ?? `${visibleMonth}-01`;
+	const visiblePlanRangeEnd = visiblePlanDates[visiblePlanDates.length - 1]?.date ?? visiblePlanRangeStart;
+	const planDaysByDate = useMemo(
+		() => createPlanDaysForRange(planSnapshot.plans, visiblePlanRangeStart, visiblePlanRangeEnd, today),
+		[planSnapshot, today, visiblePlanRangeEnd, visiblePlanRangeStart],
+	);
 	const plansById = useMemo(() => createPlansById(planSnapshot), [planSnapshot]);
 	const economicEventsByDate = useMemo(() => {
 		if (journalTypeFilter !== 'live' || !plugin.settings.economicCalendarEnabled) {
@@ -302,12 +313,10 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 		}
 	}, [filteredSnapshot, isLoading, journalTypeFilter, planSnapshot, selectedDate, today]);
 
-	const calendarDates = useMemo(() => getCalendarDates(visibleMonth), [visibleMonth]);
-	const horizontalCalendarDates = useMemo(() => getMonthDates(visibleMonth), [visibleMonth]);
 	const selectedDay = filteredSnapshot.daysByDate[selectedDate] ?? createEmptyDay(selectedDate);
 	const selectedPlanDay =
 		journalTypeFilter === 'live'
-			? planSnapshot.daysByDate[selectedDate] ?? createEmptyPlanDay(selectedDate)
+			? planDaysByDate[selectedDate] ?? createEmptyPlanDay(selectedDate)
 			: createEmptyPlanDay(selectedDate);
 	const selectedEconomicEvents = economicEventsByDate[selectedDate] ?? [];
 
@@ -466,7 +475,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 							day={filteredSnapshot.daysByDate[calendarDate.date]}
 							economicNewsCount={economicEventsByDate[calendarDate.date]?.length ?? 0}
 							planDay={
-								journalTypeFilter === 'live' ? planSnapshot.daysByDate[calendarDate.date] : undefined
+								journalTypeFilter === 'live' ? planDaysByDate[calendarDate.date] : undefined
 							}
 							isSelected={calendarDate.date === selectedDate}
 							isToday={calendarDate.date === today}
@@ -493,7 +502,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 								day={filteredSnapshot.daysByDate[calendarDate.date]}
 								economicNewsCount={economicEventsByDate[calendarDate.date]?.length ?? 0}
 								planDay={
-									journalTypeFilter === 'live' ? planSnapshot.daysByDate[calendarDate.date] : undefined
+									journalTypeFilter === 'live' ? planDaysByDate[calendarDate.date] : undefined
 								}
 								isSelected={calendarDate.date === selectedDate}
 								isToday={calendarDate.date === today}
@@ -1148,11 +1157,9 @@ function createEmptyPlanDay(date: string): JournalCalendarPlanDay {
 function createPlansById(snapshot: JournalPlanSnapshot): Map<string, JournalCalendarPlan> {
 	const plansById = new Map<string, JournalCalendarPlan>();
 
-	for (const day of Object.values(snapshot.daysByDate)) {
-		for (const plan of day.plans) {
-			if (!plansById.has(plan.id)) {
-				plansById.set(plan.id, plan);
-			}
+	for (const plan of snapshot.plans) {
+		if (!plansById.has(plan.id)) {
+			plansById.set(plan.id, plan);
 		}
 	}
 
@@ -1166,11 +1173,11 @@ function getAutoSelectedDate(
 	today: string,
 ): string {
 	if (journalTypeFilter === 'live') {
-		if (hasLiveCalendarDataOnDate(tradeSnapshot, planSnapshot, today)) {
+		if (hasLiveCalendarDataOnDate(tradeSnapshot, planSnapshot.plans, today)) {
 			return today;
 		}
 
-		return getLatestLiveCalendarDate(tradeSnapshot, planSnapshot);
+		return getLatestLiveCalendarDate(tradeSnapshot, planSnapshot.plans, today);
 	}
 
 	return tradeSnapshot.dayDates[tradeSnapshot.dayDates.length - 1] ?? '';
@@ -1178,17 +1185,22 @@ function getAutoSelectedDate(
 
 function hasLiveCalendarDataOnDate(
 	tradeSnapshot: JournalCalendarSnapshot,
-	planSnapshot: JournalPlanSnapshot,
+	plans: readonly JournalCalendarPlan[],
 	date: string,
 ): boolean {
-	return Boolean(tradeSnapshot.daysByDate[date]?.trades.length || planSnapshot.daysByDate[date]?.openPlanCount);
+	return Boolean(
+		tradeSnapshot.daysByDate[date]?.trades.length ||
+			plans.some((plan) => plan.startDate <= date && getPlanEffectiveEndDate(plan, date) >= date),
+	);
 }
 
 function getLatestLiveCalendarDate(
 	tradeSnapshot: JournalCalendarSnapshot,
-	planSnapshot: JournalPlanSnapshot,
+	plans: readonly JournalCalendarPlan[],
+	today: string,
 ): string {
-	const dates = new Set([...tradeSnapshot.dayDates, ...planSnapshot.dayDates]);
+	const planDates = plans.map((plan) => getPlanEffectiveEndDate(plan, today));
+	const dates = new Set([...tradeSnapshot.dayDates, ...planDates]);
 	const sortedDates = [...dates].sort();
 	return sortedDates[sortedDates.length - 1] ?? '';
 }

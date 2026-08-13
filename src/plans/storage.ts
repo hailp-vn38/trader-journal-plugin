@@ -5,16 +5,17 @@ import { splitFrontmatter } from '../trades/parser';
 import { stringifyValue } from '../trades/format';
 import { PLAN_CODE_BLOCK_LANGUAGE } from './types';
 import type { LinkedTradeRef, TradePlanEntry, TradePlanOption, TradePlanStatus } from './types';
-import { listTradeSetups } from '../setups/storage';
 import { createWikiLink } from '../utils/wikiLinks';
 import { mergeFrontmatterTags } from '../utils/frontmatterTags';
+import { classifyTraderJournalPath } from '../journal/pathScope';
+import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
 
 const PLAN_NOTE_TYPE = 'trader-journal-live-plan';
 const SCHEMA_VERSION = 1;
 const DEFAULT_PLAN_FOLDER = 'Trading/Live/_plans';
 const PLAN_BLOCK_PATTERN = /```trader-journal-plan\s*\n([\s\S]*?)\n```/g;
 
-interface TradePlanFileEntry {
+export interface TradePlanFileEntry {
 	file: TFile;
 	filePath: string;
 	plan: TradePlanEntry;
@@ -112,6 +113,7 @@ export async function saveTradePlan(
 	const setupLink = await resolveSetupLink(plugin, normalizedPlan);
 	const file = await plugin.app.vault.create(filePath, renderPlanNote(normalizedPlan, setupLink));
 	await updatePlanFrontmatter(plugin, file, normalizedPlan);
+	await plugin.referenceDataService.refreshFile(file);
 	return file;
 }
 
@@ -153,6 +155,7 @@ export async function updateTradePlanInFile(
 	}
 
 	await updatePlanFrontmatter(plugin, file, plan);
+	await plugin.referenceDataService.refreshFile(file);
 	return file;
 }
 
@@ -162,7 +165,7 @@ export async function listTradePlanOptions(
 ): Promise<TradePlanOption[]> {
 	const normalizedSymbol = args.symbol ? normalizeSymbol(args.symbol) : '';
 	const includePlanId = stringifyValue(args.includePlanId);
-	const entries = await readTradePlanEntries(plugin);
+	const entries = await plugin.referenceDataService.listPlans();
 
 	return entries
 		.filter(({ plan }) => {
@@ -212,13 +215,7 @@ export async function getTradePlanById(
 		return null;
 	}
 
-	for (const entry of await readTradePlanEntries(plugin)) {
-		if (stringifyValue(entry.plan.id) === normalizedPlanId) {
-			return entry;
-		}
-	}
-
-	return null;
+	return plugin.referenceDataService.getPlanById(normalizedPlanId);
 }
 
 export async function linkTradeToPlan(
@@ -282,12 +279,7 @@ export async function unlinkTradeFromPlan(
 }
 
 export function isPotentialPlanFile(plugin: TraderJournalPlugin, file: TFile): boolean {
-	if (file.extension !== 'md') {
-		return false;
-	}
-
-	const planFolder = getPlanRootFolder(plugin);
-	return planFolder ? file.path.startsWith(`${planFolder}/`) : false;
+	return file.extension === 'md' && classifyTraderJournalPath(plugin, file.path) === 'plan';
 }
 
 export function getPlanRootFolder(plugin: TraderJournalPlugin): string {
@@ -328,13 +320,18 @@ export function normalizePlanEndDate(value: unknown): string | null {
 	return isDateKey(raw) ? raw : null;
 }
 
-async function readTradePlanEntries(plugin: TraderJournalPlugin): Promise<TradePlanFileEntry[]> {
+export async function scanTradePlanEntries(plugin: TraderJournalPlugin): Promise<TradePlanFileEntry[]> {
 	const files = getPlanFiles(plugin);
-	const entries = await Promise.all(files.map((file) => readTradePlanEntry(plugin, file)));
+	const entries = await mapWithConcurrency(files, INDEX_READ_CONCURRENCY, async (file) =>
+		readTradePlanFile(plugin, file),
+	);
 	return entries.filter((entry): entry is TradePlanFileEntry => entry !== null);
 }
 
-async function readTradePlanEntry(plugin: TraderJournalPlugin, file: TFile): Promise<TradePlanFileEntry | null> {
+export async function readTradePlanFile(
+	plugin: TraderJournalPlugin,
+	file: TFile,
+): Promise<TradePlanFileEntry | null> {
 	try {
 		const content = await plugin.app.vault.cachedRead(file);
 		if (!hasPlanBlocks(content)) {
@@ -434,7 +431,7 @@ async function resolveSetupLink(plugin: TraderJournalPlugin, plan: TradePlanEntr
 		return '';
 	}
 
-	const setup = (await listTradeSetups(plugin)).find((item) => item.id === setupId);
+	const setup = await plugin.referenceDataService.getSetupById(setupId);
 	return setup ? createWikiLink(setup.filePath) : '';
 }
 

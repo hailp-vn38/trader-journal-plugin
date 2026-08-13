@@ -1,8 +1,9 @@
 import type { TAbstractFile } from 'obsidian';
-import { TFile } from 'obsidian';
+import { TFile, TFolder } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { JournalPlanIndex, type JournalPlanSnapshot } from '../plans/planIndex';
 import { JournalCalendarIndex, type JournalCalendarSnapshot } from '../trades/journalIndex';
+import { classifyTraderJournalPath, isPathInFolder } from './pathScope';
 
 const FILE_UPDATE_DEBOUNCE_MS = 250;
 
@@ -21,8 +22,6 @@ const EMPTY_TRADE_SNAPSHOT: JournalCalendarSnapshot = {
 };
 
 const EMPTY_PLAN_SNAPSHOT: JournalPlanSnapshot = {
-	daysByDate: {},
-	dayDates: [],
 	planCount: 0,
 	plans: [],
 };
@@ -66,10 +65,11 @@ export class JournalDataService {
 		return this.enqueue(async () => this.rebuild());
 	}
 
-	refreshIfStarted(): void {
+	refreshIfStarted(): Promise<void> {
 		if (this.started && !this.disposed) {
-			void this.enqueue(async () => this.rebuild());
+			return this.enqueue(async () => this.rebuild());
 		}
+		return Promise.resolve();
 	}
 
 	private start(): void {
@@ -94,23 +94,37 @@ export class JournalDataService {
 		);
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('delete', (file: TAbstractFile) => {
-				this.snapshot = {
-					...this.snapshot,
-					trades: this.tradeIndex.removePath(file.path),
-					plans: this.planIndex.removePath(file.path),
-				};
-				this.notify();
+				const kind = classifyTraderJournalPath(this.plugin, file.path);
+				if (kind !== 'journal' && kind !== 'plan') {
+					return;
+				}
+
+				this.cancelPendingUpdates(file.path, file instanceof TFolder);
+				if (file instanceof TFolder) {
+					this.removePathPrefix(file.path);
+				} else {
+					this.removePath(file.path);
+				}
 			}),
 		);
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
-				this.snapshot = {
-					...this.snapshot,
-					trades: this.tradeIndex.removePath(oldPath),
-					plans: this.planIndex.removePath(oldPath),
-				};
-				this.notify();
-				if (file instanceof TFile) {
+				const oldKind = classifyTraderJournalPath(this.plugin, oldPath);
+				const newKind = classifyTraderJournalPath(this.plugin, file.path);
+				const wasIndexed = oldKind === 'journal' || oldKind === 'plan';
+				const isIndexed = newKind === 'journal' || newKind === 'plan';
+				if (!wasIndexed && !isIndexed) {
+					return;
+				}
+
+				this.cancelPendingUpdates(oldPath, file instanceof TFolder);
+				if (file instanceof TFolder) {
+					void this.enqueue(async () => this.rebuild());
+					return;
+				}
+
+				this.removePath(oldPath);
+				if (file instanceof TFile && isIndexed) {
 					this.scheduleFileUpdate(file);
 				}
 			}),
@@ -120,6 +134,11 @@ export class JournalDataService {
 	}
 
 	private scheduleFileUpdate(file: TFile): void {
+		const kind = classifyTraderJournalPath(this.plugin, file.path);
+		if (file.extension !== 'md' || (kind !== 'journal' && kind !== 'plan')) {
+			return;
+		}
+
 		const existingTimer = this.fileUpdateTimers.get(file.path);
 		if (existingTimer !== undefined) {
 			window.clearTimeout(existingTimer);
@@ -151,14 +170,63 @@ export class JournalDataService {
 
 	private async updateFile(file: TFile): Promise<void> {
 		try {
-			const [trades, plans] = await Promise.all([
+			const [tradesChanged, plansChanged] = await Promise.all([
 				this.tradeIndex.updateFile(file),
 				this.planIndex.updateFile(file),
 			]);
-			this.snapshot = { trades, plans, isLoading: false };
+			if (!tradesChanged && !plansChanged) {
+				return;
+			}
+
+			this.snapshot = {
+				trades: this.tradeIndex.getSnapshot(),
+				plans: this.planIndex.getSnapshot(),
+				isLoading: false,
+			};
 			this.notify();
 		} catch (error) {
 			console.error('Trader Journal failed to update journal index', error);
+		}
+	}
+
+	private removePath(path: string): void {
+		const tradesChanged = this.tradeIndex.removePath(path);
+		const plansChanged = this.planIndex.removePath(path);
+		if (!tradesChanged && !plansChanged) {
+			return;
+		}
+
+		this.snapshot = {
+			...this.snapshot,
+			trades: this.tradeIndex.getSnapshot(),
+			plans: this.planIndex.getSnapshot(),
+		};
+		this.notify();
+	}
+
+	private removePathPrefix(pathPrefix: string): void {
+		const tradesChanged = this.tradeIndex.removePathPrefix(pathPrefix);
+		const plansChanged = this.planIndex.removePathPrefix(pathPrefix);
+		if (!tradesChanged && !plansChanged) {
+			return;
+		}
+
+		this.snapshot = {
+			...this.snapshot,
+			trades: this.tradeIndex.getSnapshot(),
+			plans: this.planIndex.getSnapshot(),
+		};
+		this.notify();
+	}
+
+	private cancelPendingUpdates(path: string, includeDescendants: boolean): void {
+		for (const [pendingPath, timer] of this.fileUpdateTimers) {
+			if (pendingPath !== path && !(includeDescendants && isPathInFolder(pendingPath, path))) {
+				continue;
+			}
+
+			window.clearTimeout(timer);
+			this.fileUpdateTimers.delete(pendingPath);
 		}
 	}
 

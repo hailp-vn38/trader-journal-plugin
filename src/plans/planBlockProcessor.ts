@@ -9,10 +9,14 @@ import { registerImageModalInteraction } from '../ui/imageModalInteraction';
 import { PLAN_CODE_BLOCK_LANGUAGE } from './types';
 import type { TradePlanEntry, TradePlanStatus } from './types';
 import { normalizeLinkedTrades, normalizePlanEndDate, normalizePlanStatus, parsePlanJson } from './storage';
+import { listTradeSetups } from '../setups/storage';
 
 interface DetailItem {
 	label: string;
 	value: string;
+	modifierClass?: string;
+	onSelect?: () => void;
+	selectLabel?: string;
 }
 
 export function registerPlanBlockProcessor(plugin: TraderJournalPlugin): void {
@@ -40,7 +44,7 @@ function renderPlanBlock(
 
 	const cardEl = el.createDiv({ cls: 'trader-journal-plan-card' });
 	renderHeader(plugin, cardEl, plan, ctx);
-	renderDetails(plugin, cardEl, plan);
+	renderDetails(plugin, cardEl, plan, ctx);
 	renderTextSections(plugin, cardEl, plan);
 	renderImages(plugin, cardEl, plan, ctx);
 	renderLinkedTrades(plugin, cardEl, plan, ctx);
@@ -111,31 +115,85 @@ function renderEditButton(
 	ctx.addChild(child);
 }
 
-function renderDetails(plugin: TraderJournalPlugin, parentEl: HTMLElement, plan: TradePlanEntry): void {
+function renderDetails(
+	plugin: TraderJournalPlugin,
+	parentEl: HTMLElement,
+	plan: TradePlanEntry,
+	ctx: MarkdownPostProcessorContext,
+): void {
 	const tr = getTranslator(plugin.settings.language);
+	const status = normalizePlanStatus(plan.status);
 	const endDate = normalizePlanEndDate(plan.end_date);
+	const setupId = stringifyValue(plan.setup_id);
+	const setupName = stringifyValue(plan.setup);
 	const detailItems: DetailItem[] = [
-		{ label: tr('detail.status'), value: getPlanStatusLabel(plugin, normalizePlanStatus(plan.status)) },
-		{ label: tr('detail.bias'), value: getPlanBiasLabel(plugin, plan.bias) },
-		{ label: tr('detail.dateRange'), value: [stringifyValue(plan.start_date), endDate].filter(Boolean).join(' - ') },
-		{ label: tr('detail.setup'), value: stringifyValue(plan.setup) },
-		{ label: tr('detail.timeframe'), value: formatTimeframes(plan.timeframes) },
+		{
+			label: tr('detail.status'),
+			value: getPlanStatusLabel(plugin, status),
+			modifierClass: `trader-journal-plan-detail--status-${status}`,
+		},
+		{
+			label: tr('detail.bias'),
+			value: getPlanBiasLabel(plugin, plan.bias),
+			modifierClass: `trader-journal-plan-detail--bias-${getPlanBiasKey(plan.bias)}`,
+		},
+		{
+			label: tr('detail.dateRange'),
+			value: [stringifyValue(plan.start_date), endDate].filter(Boolean).join(' - '),
+			modifierClass: 'trader-journal-plan-detail--date-range',
+		},
+		{
+			label: tr('detail.setup'),
+			value: setupName,
+			modifierClass: 'trader-journal-plan-detail--setup',
+			onSelect: setupId || setupName
+				? () => void openLinkedSetup(plugin, setupId, setupName, ctx.sourcePath)
+				: undefined,
+			selectLabel: setupName ? tr('setup.openLinked', { setup: setupName }) : undefined,
+		},
+		{
+			label: tr('detail.timeframe'),
+			value: formatTimeframes(plan.timeframes),
+			modifierClass: 'trader-journal-plan-detail--timeframe',
+		},
 	].filter((item) => item.value);
 
 	if (detailItems.length === 0) {
 		return;
 	}
 
-	renderDetailGrid(parentEl, detailItems);
+	renderDetailGrid(parentEl, detailItems, ctx);
+}
+
+async function openLinkedSetup(
+	plugin: TraderJournalPlugin,
+	setupId: string,
+	setupName: string,
+	sourcePath: string,
+): Promise<void> {
+	try {
+		const setups = await listTradeSetups(plugin);
+		const setup = setups.find((item) => item.id === setupId) ??
+			setups.find((item) => item.name.toLocaleLowerCase() === setupName.toLocaleLowerCase());
+		if (!setup) {
+			new Notice(getTranslator(plugin.settings.language)('setup.linkedNotFound'));
+			return;
+		}
+
+		await plugin.app.workspace.openLinkText(setup.filePath, sourcePath, false);
+	} catch (error) {
+		console.error('Trader Journal failed to open linked setup', error);
+		new Notice(getTranslator(plugin.settings.language)('dashboard.openSetupError'));
+	}
 }
 
 function renderTextSections(plugin: TraderJournalPlugin, parentEl: HTMLElement, plan: TradePlanEntry): void {
 	const tr = getTranslator(plugin.settings.language);
 	const sections = [
-		{ title: tr('detail.entryPlan'), value: stringifyValue(plan.entry_plan) },
-		{ title: tr('detail.invalidation'), value: stringifyValue(plan.invalidation) },
-		{ title: tr('detail.takeProfitPlan'), value: stringifyValue(plan.take_profit_plan) },
-		{ title: tr('detail.riskNotes'), value: stringifyValue(plan.risk_notes) },
+		{ title: tr('detail.entryPlan'), value: stringifyValue(plan.entry_plan), tone: 'entry' },
+		{ title: tr('detail.invalidation'), value: stringifyValue(plan.invalidation), tone: 'invalidation' },
+		{ title: tr('detail.takeProfitPlan'), value: stringifyValue(plan.take_profit_plan), tone: 'take-profit' },
+		{ title: tr('detail.riskNotes'), value: stringifyValue(plan.risk_notes), tone: 'risk' },
 		{ title: tr('detail.notes'), value: stringifyValue(plan.notes) },
 	];
 
@@ -144,7 +202,12 @@ function renderTextSections(plugin: TraderJournalPlugin, parentEl: HTMLElement, 
 			continue;
 		}
 
-		const sectionEl = parentEl.createDiv({ cls: 'trader-journal-trade-card__section' });
+		const sectionEl = parentEl.createDiv({
+			cls: [
+				'trader-journal-trade-card__section',
+				section.tone ? `trader-journal-plan-section--${section.tone}` : '',
+			].filter(Boolean).join(' '),
+		});
 		sectionEl.createDiv({
 			cls: 'trader-journal-trade-card__section-title',
 			text: section.title,
@@ -318,19 +381,48 @@ class PlanImageModal extends Modal {
 	}
 }
 
-function renderDetailGrid(parentEl: HTMLElement, detailItems: DetailItem[]): void {
+function renderDetailGrid(
+	parentEl: HTMLElement,
+	detailItems: DetailItem[],
+	ctx?: MarkdownPostProcessorContext,
+): void {
 	const gridEl = parentEl.createDiv({ cls: 'trader-journal-trade-details' });
 	for (const item of detailItems) {
-		const itemEl = gridEl.createDiv({ cls: 'trader-journal-trade-detail' });
+		const itemEl = gridEl.createDiv({
+			cls: ['trader-journal-trade-detail', item.modifierClass].filter(Boolean).join(' '),
+		});
 		itemEl.createDiv({
 			cls: 'trader-journal-trade-detail__label',
 			text: item.label,
 		});
-		itemEl.createDiv({
-			cls: 'trader-journal-trade-detail__value',
-			text: item.value,
-		});
+		if (item.onSelect && ctx) {
+			const buttonEl = itemEl.createEl('button', {
+				cls: 'trader-journal-trade-detail__value trader-journal-trade-detail__link',
+				text: item.value,
+				attr: {
+					type: 'button',
+					'aria-label': item.selectLabel ?? item.value,
+					title: item.value,
+				},
+			});
+			const child = new MarkdownRenderChild(buttonEl);
+			child.registerDomEvent(buttonEl, 'click', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				item.onSelect?.();
+			});
+			ctx.addChild(child);
+		} else {
+			itemEl.createDiv({
+				cls: 'trader-journal-trade-detail__value',
+				text: item.value,
+			});
+		}
 	}
+}
+
+function getPlanBiasKey(value: unknown): 'long' | 'short' | 'neutral' {
+	return value === 'long' || value === 'short' ? value : 'neutral';
 }
 
 function renderPlanBadge(parentEl: HTMLElement, text: string, status: TradePlanStatus): void {

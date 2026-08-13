@@ -5,6 +5,7 @@ import { parseFrontmatter, splitFrontmatter } from '../trades/parser';
 import type { NewTradeSetup, TradeSetupDefinition, TradeSetupStatus } from './types';
 import { mergeFrontmatterTags } from '../utils/frontmatterTags';
 import { normalizeSymbol } from '../settings';
+import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
 
 const SETUP_NOTE_TYPE = 'trader-journal-setup';
 const DEFAULT_SETUP_FOLDER = 'Trading/_setups';
@@ -18,6 +19,10 @@ const SETUP_SECTIONS = [
 ] as const;
 
 export async function listTradeSetups(plugin: TraderJournalPlugin): Promise<TradeSetupDefinition[]> {
+	return plugin.referenceDataService.listSetups();
+}
+
+export async function scanTradeSetups(plugin: TraderJournalPlugin): Promise<TradeSetupDefinition[]> {
 	const rootFolder = plugin.app.vault.getAbstractFileByPath(getSetupRootFolder(plugin));
 	if (!(rootFolder instanceof TFolder)) {
 		return [];
@@ -25,7 +30,9 @@ export async function listTradeSetups(plugin: TraderJournalPlugin): Promise<Trad
 
 	const files: TFile[] = [];
 	collectMarkdownFiles(rootFolder, files);
-	const setups = await Promise.all(files.map((file) => readTradeSetup(plugin, file)));
+	const setups = await mapWithConcurrency(files, INDEX_READ_CONCURRENCY, async (file) =>
+		readTradeSetupFile(plugin, file),
+	);
 
 	return setups
 		.filter((setup): setup is TradeSetupDefinition => setup !== null)
@@ -63,7 +70,8 @@ export async function createTradeSetup(
 		filePath,
 	};
 
-	await plugin.app.vault.create(filePath, renderSetupNote(normalizedSetup));
+	const file = await plugin.app.vault.create(filePath, renderSetupNote(normalizedSetup));
+	await plugin.referenceDataService.refreshFile(file);
 	return normalizedSetup;
 }
 
@@ -103,6 +111,7 @@ export async function updateTradeSetup(
 		metadata.updatedAt = updatedSetup.updatedAt;
 	});
 	await plugin.app.vault.process(abstractFile, (content) => updateSetupTitle(content, updatedSetup.name));
+	await plugin.referenceDataService.refreshFile(abstractFile);
 
 	return updatedSetup;
 }
@@ -111,7 +120,7 @@ export function getSetupRootFolder(plugin: TraderJournalPlugin): string {
 	return normalizePath(plugin.settings.setupFolder || DEFAULT_SETUP_FOLDER).replace(/\/$/, '');
 }
 
-async function readTradeSetup(
+export async function readTradeSetupFile(
 	plugin: TraderJournalPlugin,
 	file: TFile,
 ): Promise<TradeSetupDefinition | null> {

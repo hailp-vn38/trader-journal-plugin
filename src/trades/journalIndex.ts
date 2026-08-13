@@ -11,6 +11,8 @@ import { isPotentialJournalFile } from './storage';
 import type { TradeEntry, TradeJournalType } from './types';
 import type { LiveTradeStatus, TradeResult, TradeSide } from './types';
 import type { TraderJournalLanguage } from '../settings';
+import { isPathInFolder } from '../journal/pathScope';
+import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -53,7 +55,14 @@ export interface JournalCalendarSnapshot {
 interface JournalCalendarFileEntry {
 	path: string;
 	trades: JournalCalendarTrade[];
+	fingerprint: string;
 }
+
+const EMPTY_JOURNAL_CALENDAR_SNAPSHOT: JournalCalendarSnapshot = {
+	daysByDate: {},
+	dayDates: [],
+	tradeCount: 0,
+};
 
 interface JournalIdentity {
 	journalDate: string;
@@ -64,6 +73,7 @@ interface JournalIdentity {
 export class JournalCalendarIndex {
 	private readonly plugin: TraderJournalPlugin;
 	private readonly entriesByPath = new Map<string, JournalCalendarFileEntry>();
+	private snapshot = EMPTY_JOURNAL_CALENDAR_SNAPSHOT;
 
 	constructor(plugin: TraderJournalPlugin) {
 		this.plugin = plugin;
@@ -73,7 +83,9 @@ export class JournalCalendarIndex {
 		this.entriesByPath.clear();
 
 		const files = getJournalFiles(this.plugin);
-		const entries = await Promise.all(files.map((file) => this.readFileEntry(file)));
+		const entries = await mapWithConcurrency(files, INDEX_READ_CONCURRENCY, async (file) =>
+			this.readFileEntry(file),
+		);
 
 		for (const entry of entries) {
 			if (entry) {
@@ -81,28 +93,61 @@ export class JournalCalendarIndex {
 			}
 		}
 
-		return this.getSnapshot();
+		this.snapshot = this.buildSnapshot();
+		return this.snapshot;
 	}
 
-	async updateFile(file: TFile): Promise<JournalCalendarSnapshot> {
-		this.entriesByPath.delete(file.path);
+	async updateFile(file: TFile): Promise<boolean> {
+		const previousEntry = this.entriesByPath.get(file.path) ?? null;
+		if (!isPotentialJournalFile(this.plugin, file)) {
+			return false;
+		}
 
-		if (isPotentialJournalFile(this.plugin, file)) {
-			const entry = await this.readFileEntry(file);
-			if (entry) {
-				this.entriesByPath.set(entry.path, entry);
+		const entry = await this.readFileEntry(file);
+		if (previousEntry?.fingerprint === entry?.fingerprint) {
+			return false;
+		}
+
+		if (entry) {
+			this.entriesByPath.set(entry.path, entry);
+		} else {
+			this.entriesByPath.delete(file.path);
+		}
+		this.snapshot = this.buildSnapshot();
+		return true;
+	}
+
+	removePath(path: string): boolean {
+		if (!this.entriesByPath.delete(path)) {
+			return false;
+		}
+
+		this.snapshot = this.buildSnapshot();
+		return true;
+	}
+
+	removePathPrefix(pathPrefix: string): boolean {
+		let changed = false;
+		for (const path of this.entriesByPath.keys()) {
+			if (isPathInFolder(path, pathPrefix)) {
+				this.entriesByPath.delete(path);
+				changed = true;
 			}
 		}
 
-		return this.getSnapshot();
-	}
+		if (!changed) {
+			return false;
+		}
 
-	removePath(path: string): JournalCalendarSnapshot {
-		this.entriesByPath.delete(path);
-		return this.getSnapshot();
+		this.snapshot = this.buildSnapshot();
+		return true;
 	}
 
 	getSnapshot(): JournalCalendarSnapshot {
+		return this.snapshot;
+	}
+
+	private buildSnapshot(): JournalCalendarSnapshot {
 		const daysByDate: Record<string, JournalCalendarDay> = {};
 
 		for (const entry of this.entriesByPath.values()) {
@@ -168,12 +213,19 @@ export class JournalCalendarIndex {
 			return {
 				path: file.path,
 				trades,
+				fingerprint: createTradeEntryFingerprint(trades),
 			};
 		} catch (error) {
 			console.error(`Trader Journal failed to index ${file.path}`, error);
 			return null;
 		}
 	}
+}
+
+function createTradeEntryFingerprint(trades: readonly JournalCalendarTrade[]): string {
+	return JSON.stringify(
+		trades.map(({ file: _file, ...trade }) => trade),
+	);
 }
 
 function getJournalFiles(plugin: TraderJournalPlugin): TFile[] {

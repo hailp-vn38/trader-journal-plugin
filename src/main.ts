@@ -16,9 +16,11 @@ import type { EconomicCalendarCache } from './economicCalendar/types';
 import { JournalDataService } from './journal/JournalDataService';
 import { registerTraderJournalDashboardView } from './dashboard/DashboardView';
 import { syncGraphTypeTags } from './graph/tagSync';
+import { ReferenceDataService } from './journal/ReferenceDataService';
 
 interface TraderJournalPluginData {
 	settings: TraderJournalSettings;
+	dataMigrationVersion: number;
 	economicCalendarCache: EconomicCalendarCache | null;
 	economicCalendarLastRequestAt: string | null;
 }
@@ -29,12 +31,15 @@ export default class TraderJournalPlugin extends Plugin {
 	economicCalendarLastRequestAt: string | null = null;
 	economicCalendarService!: EconomicCalendarService;
 	journalDataService!: JournalDataService;
+	referenceDataService!: ReferenceDataService;
+	dataMigrationVersion = 0;
 	private saveQueue: Promise<void> = Promise.resolve();
 
 	async onload() {
 		await this.loadSettings();
 		this.economicCalendarService = new EconomicCalendarService(this);
 		this.journalDataService = new JournalDataService(this);
+		this.referenceDataService = new ReferenceDataService(this);
 		const tr = getTranslator(this.settings.language);
 
 		this.addRibbonIcon(TRADER_JOURNAL_CALENDAR_ICON, tr('command.openTradeCalendar'), () => {
@@ -57,12 +62,14 @@ export default class TraderJournalPlugin extends Plugin {
 		const data = (await this.loadData()) as unknown;
 		if (isPluginData(data)) {
 			this.settings = normalizeSettings(data.settings);
+			this.dataMigrationVersion = normalizeMigrationVersion(data.dataMigrationVersion);
 			this.economicCalendarCache = normalizeEconomicCalendarCache(data.economicCalendarCache);
 			this.economicCalendarLastRequestAt = normalizeIsoDate(data.economicCalendarLastRequestAt);
 			return;
 		}
 
 		this.settings = normalizeSettings(data as Partial<TraderJournalSettings> | null | undefined);
+		this.dataMigrationVersion = 0;
 		this.economicCalendarCache = null;
 		this.economicCalendarLastRequestAt = null;
 	}
@@ -81,10 +88,16 @@ export default class TraderJournalPlugin extends Plugin {
 		await this.persistData();
 	}
 
+	async saveDataMigrationVersion(version: number): Promise<void> {
+		this.dataMigrationVersion = Math.max(this.dataMigrationVersion, version);
+		await this.persistData();
+	}
+
 	private async persistData(): Promise<void> {
 		this.saveQueue = this.saveQueue.catch(() => undefined).then(async () => {
 			const data: TraderJournalPluginData = {
 				settings: this.settings,
+				dataMigrationVersion: this.dataMigrationVersion,
 				economicCalendarCache: this.economicCalendarCache,
 				economicCalendarLastRequestAt: this.economicCalendarLastRequestAt,
 			};
@@ -111,6 +124,10 @@ function normalizeEconomicCalendarCache(value: unknown): EconomicCalendarCache |
 
 function normalizeIsoDate(value: unknown): string | null {
 	return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null;
+}
+
+function normalizeMigrationVersion(value: unknown): number {
+	return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

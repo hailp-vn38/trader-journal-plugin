@@ -15,6 +15,7 @@ import {
 import type { CalendarDisplayMode, TraderJournalLanguage } from '../settings';
 import { getTranslator } from '../i18n';
 import { EconomicCalendarSettings } from './settings/EconomicCalendarSettings';
+import { useCommittedFolderSetting } from './settings/useCommittedFolderSetting';
 
 interface SettingsViewProps {
 	plugin: TraderJournalPlugin;
@@ -22,10 +23,10 @@ interface SettingsViewProps {
 
 function SettingsView({ plugin }: SettingsViewProps) {
 	const [language, setLanguage] = useState(plugin.settings.language);
-	const [journalFolder, setJournalFolder] = useState(plugin.settings.journalFolder);
-	const [liveJournalFolder, setLiveJournalFolder] = useState(plugin.settings.liveJournalFolder);
-	const [planFolder, setPlanFolder] = useState(plugin.settings.planFolder);
-	const [setupFolder, setSetupFolder] = useState(plugin.settings.setupFolder);
+	const journalFolder = useCommittedFolderSetting(plugin, 'journalFolder');
+	const liveJournalFolder = useCommittedFolderSetting(plugin, 'liveJournalFolder');
+	const planFolder = useCommittedFolderSetting(plugin, 'planFolder');
+	const setupFolder = useCommittedFolderSetting(plugin, 'setupFolder');
 	const [symbols, setSymbols] = useState(plugin.settings.symbols);
 	const [newSymbol, setNewSymbol] = useState('');
 	const [timeframes, setTimeframes] = useState(plugin.settings.timeframes);
@@ -40,30 +41,6 @@ function SettingsView({ plugin }: SettingsViewProps) {
 		plugin.settings.language = value;
 		void plugin.saveSettings();
 		plugin.app.workspace.trigger(LANGUAGE_CHANGE_EVENT, value);
-	};
-
-	const saveJournalFolder = (value: string) => {
-		setJournalFolder(value);
-		plugin.settings.journalFolder = value;
-		void plugin.saveSettings();
-	};
-
-	const saveLiveJournalFolder = (value: string) => {
-		setLiveJournalFolder(value);
-		plugin.settings.liveJournalFolder = value;
-		void plugin.saveSettings();
-	};
-
-	const savePlanFolder = (value: string) => {
-		setPlanFolder(value);
-		plugin.settings.planFolder = value;
-		void plugin.saveSettings();
-	};
-
-	const saveSetupFolder = (value: string) => {
-		setSetupFolder(value);
-		plugin.settings.setupFolder = value;
-		void plugin.saveSettings();
 	};
 
 	const saveSymbols = (nextSymbols: string[]) => {
@@ -174,10 +151,11 @@ function SettingsView({ plugin }: SettingsViewProps) {
 				<span className="trader-journal-setting__description">{tr('settings.backtestFolderDescription')}</span>
 				<input
 					type="text"
-					value={journalFolder}
+					value={journalFolder.value}
 					placeholder="Trading/Backtests"
-					onChange={(event: ChangeEvent<HTMLInputElement>) => saveJournalFolder(event.target.value)}
-					onBlur={() => plugin.journalDataService.refreshIfStarted()}
+					onChange={journalFolder.onChange}
+					onBlur={journalFolder.onBlur}
+					onKeyDown={journalFolder.onKeyDown}
 				/>
 			</label>
 
@@ -186,10 +164,11 @@ function SettingsView({ plugin }: SettingsViewProps) {
 				<span className="trader-journal-setting__description">{tr('settings.liveFolderDescription')}</span>
 				<input
 					type="text"
-					value={liveJournalFolder}
+					value={liveJournalFolder.value}
 					placeholder="Trading/Live"
-					onChange={(event: ChangeEvent<HTMLInputElement>) => saveLiveJournalFolder(event.target.value)}
-					onBlur={() => plugin.journalDataService.refreshIfStarted()}
+					onChange={liveJournalFolder.onChange}
+					onBlur={liveJournalFolder.onBlur}
+					onKeyDown={liveJournalFolder.onKeyDown}
 				/>
 			</label>
 
@@ -198,10 +177,11 @@ function SettingsView({ plugin }: SettingsViewProps) {
 				<span className="trader-journal-setting__description">{tr('settings.planFolderDescription')}</span>
 				<input
 					type="text"
-					value={planFolder}
+					value={planFolder.value}
 					placeholder="Trading/Live/_plans"
-					onChange={(event: ChangeEvent<HTMLInputElement>) => savePlanFolder(event.target.value)}
-					onBlur={() => plugin.journalDataService.refreshIfStarted()}
+					onChange={planFolder.onChange}
+					onBlur={planFolder.onBlur}
+					onKeyDown={planFolder.onKeyDown}
 				/>
 			</label>
 
@@ -210,9 +190,11 @@ function SettingsView({ plugin }: SettingsViewProps) {
 				<span className="trader-journal-setting__description">{tr('settings.setupFolderDescription')}</span>
 				<input
 					type="text"
-					value={setupFolder}
+					value={setupFolder.value}
 					placeholder="Trading/_setups"
-					onChange={(event: ChangeEvent<HTMLInputElement>) => saveSetupFolder(event.target.value)}
+					onChange={setupFolder.onChange}
+					onBlur={setupFolder.onBlur}
+					onKeyDown={setupFolder.onKeyDown}
 				/>
 			</label>
 

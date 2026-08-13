@@ -608,6 +608,40 @@ button.trader-journal-trade-card__edit-button svg {
 	font-weight: 700;
 }
 
+.trader-journal-plan-detail--status-open .trader-journal-trade-detail__value,
+.trader-journal-plan-detail--bias-neutral .trader-journal-trade-detail__value {
+	color: var(--color-yellow);
+}
+
+.trader-journal-plan-detail--status-closed .trader-journal-trade-detail__value,
+.trader-journal-plan-detail--bias-long .trader-journal-trade-detail__value {
+	color: var(--color-green);
+}
+
+.trader-journal-plan-detail--bias-short .trader-journal-trade-detail__value {
+	color: var(--color-red);
+}
+
+.trader-journal-plan-detail--status-cancelled .trader-journal-trade-detail__value {
+	color: var(--text-muted);
+}
+
+.trader-journal-plan-detail--date-range .trader-journal-trade-detail__value {
+	color: var(--color-orange);
+}
+
+.trader-journal-plan-detail--setup .trader-journal-trade-detail__value {
+	color: var(--color-blue);
+}
+
+.trader-journal-plan-detail--timeframe .trader-journal-trade-detail__value {
+	color: var(--color-purple);
+}
+
+.trader-journal-trade-detail[class*='trader-journal-plan-detail--'] .trader-journal-trade-detail__value {
+	font-weight: 700;
+}
+
 .trader-journal-trade-detail__label,
 .trader-journal-trade-card__section-title {
 	color: var(--text-muted);
@@ -662,6 +696,46 @@ button.trader-journal-trade-detail__link:focus-visible {
 
 .trader-journal-trade-card__section {
 	margin-top: 16px;
+}
+
+.trader-journal-plan-section--entry,
+.trader-journal-plan-section--invalidation,
+.trader-journal-plan-section--take-profit,
+.trader-journal-plan-section--risk {
+	border-left: 3px solid var(--background-modifier-border);
+	padding-left: 10px;
+}
+
+.trader-journal-plan-section--entry {
+	border-left-color: var(--color-blue);
+}
+
+.trader-journal-plan-section--entry .trader-journal-trade-card__section-title {
+	color: var(--color-blue);
+}
+
+.trader-journal-plan-section--invalidation {
+	border-left-color: var(--color-red);
+}
+
+.trader-journal-plan-section--invalidation .trader-journal-trade-card__section-title {
+	color: var(--color-red);
+}
+
+.trader-journal-plan-section--take-profit {
+	border-left-color: var(--color-green);
+}
+
+.trader-journal-plan-section--take-profit .trader-journal-trade-card__section-title {
+	color: var(--color-green);
+}
+
+.trader-journal-plan-section--risk {
+	border-left-color: var(--color-orange);
+}
+
+.trader-journal-plan-section--risk .trader-journal-trade-card__section-title {
+	color: var(--color-orange);
 }
 
 .trader-journal-trade-images {

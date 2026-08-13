@@ -13,10 +13,10 @@ import {
 import { extractTrades, hasTradeBlocks, parseFrontmatter, splitFrontmatter } from './parser';
 import { TRADE_CODE_BLOCK_LANGUAGE } from './types';
 import type { TradeEntry, TradeJournalType } from './types';
-import { listTradeSetups } from '../setups/storage';
 import { getTradePlanById } from '../plans/storage';
 import { createWikiLink } from '../utils/wikiLinks';
 import { mergeFrontmatterTags } from '../utils/frontmatterTags';
+import { classifyTraderJournalPath } from '../journal/pathScope';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -219,15 +219,7 @@ export async function rebuildDailyNoteStats(
 }
 
 export function isPotentialJournalFile(plugin: TraderJournalPlugin, file: TFile): boolean {
-	if (file.extension !== 'md') {
-		return false;
-	}
-
-	const journalFolder = normalizePath(plugin.settings.journalFolder).replace(/\/$/, '');
-	const liveJournalFolder = normalizePath(plugin.settings.liveJournalFolder).replace(/\/$/, '');
-	const journalFolders = [journalFolder, liveJournalFolder].filter(Boolean);
-
-	return journalFolders.some((folder) => file.path.startsWith(`${folder}/`));
+	return file.extension === 'md' && classifyTraderJournalPath(plugin, file.path) === 'journal';
 }
 
 export function getJournalFilePath(rootFolder: string, symbol: string, journalDate: string): string {
@@ -429,11 +421,10 @@ async function resolveJournalGraphLinks(
 	const { trades } = extractTrades(body);
 	const setupIds = new Set(trades.map((trade) => stringifyValue(trade.setup_id)).filter(Boolean));
 	const planIds = new Set(trades.map((trade) => stringifyValue(trade.plan_id)).filter(Boolean));
-	const setups = setupIds.size ? await listTradeSetups(plugin) : [];
-	const setupsById = new Map(setups.map((setup) => [setup.id, setup]));
-	const setupLinks = [...setupIds]
-		.map((setupId) => setupsById.get(setupId))
+	const setups = await Promise.all([...setupIds].map((setupId) => plugin.referenceDataService.getSetupById(setupId)));
+	const setupLinks = setups
 		.filter((setup) => setup !== undefined)
+		.filter((setup) => setup !== null)
 		.map((setup) => createWikiLink(setup.filePath));
 	const planEntries = await Promise.all([...planIds].map((planId) => getTradePlanById(plugin, planId)));
 	const planLinks = planEntries
