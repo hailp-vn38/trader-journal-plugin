@@ -1425,3 +1425,599 @@ button.trader-journal-trade-detail__link:focus-visible {
 		max-height: calc(100vh - 150px);
 	}
 }
+
+.trader-journal-dashboard-view {
+	container-name: trader-journal-dashboard-view;
+	container-type: inline-size;
+	overflow: auto;
+	padding: 24px;
+}
+
+.trader-journal-dashboard {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	width: min(1180px, 100%);
+	min-width: 0;
+	margin: 0 auto;
+}
+
+.trader-journal-dashboard,
+.trader-journal-dashboard * {
+	box-sizing: border-box;
+}
+
+.trader-journal-dashboard__header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+.trader-journal-dashboard__header > div:first-child {
+	flex: 1 1 240px;
+}
+
+.trader-journal-dashboard__header h2,
+.trader-journal-dashboard__panel h3 {
+	margin: 0;
+}
+
+.trader-journal-dashboard__header p {
+	color: var(--text-muted);
+	margin: 6px 0 0;
+}
+
+.trader-journal-dashboard__quick-actions {
+	display: flex;
+	flex: 1 1 460px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.trader-journal-dashboard__quick-actions button {
+	white-space: nowrap;
+}
+
+button.trader-journal-dashboard-icon-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	min-width: 36px;
+	min-height: 36px;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+	box-shadow: none;
+	color: var(--text-muted);
+}
+
+button.trader-journal-dashboard-icon-button:hover,
+button.trader-journal-dashboard-icon-button:focus-visible {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+	color: var(--text-normal);
+}
+
+button.trader-journal-dashboard-icon-button--primary {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+button.trader-journal-dashboard-icon-button--primary:hover,
+button.trader-journal-dashboard-icon-button--primary:focus-visible {
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
+}
+
+button.trader-journal-dashboard-icon-button--compact {
+	width: 30px;
+	height: 30px;
+	min-width: 30px;
+	min-height: 30px;
+	border-radius: 7px;
+}
+
+.trader-journal-dashboard-icon-button span,
+.trader-journal-dashboard-icon-button svg {
+	display: block;
+	width: 18px;
+	height: 18px;
+}
+
+.trader-journal-dashboard-icon-button--compact span,
+.trader-journal-dashboard-icon-button--compact svg {
+	width: 16px;
+	height: 16px;
+}
+
+.trader-journal-dashboard__filters {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-secondary);
+}
+
+.trader-journal-dashboard__filters label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard__filters select {
+	width: 100%;
+}
+
+.trader-journal-dashboard__loading,
+.trader-journal-dashboard__empty {
+	color: var(--text-muted);
+}
+
+.trader-journal-dashboard__metrics {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+	gap: 12px;
+	min-width: 0;
+	width: 100%;
+}
+
+.trader-journal-dashboard-metric {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	padding: 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-secondary);
+}
+
+.trader-journal-dashboard-metric span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard-metric strong {
+	font-size: 1.55rem;
+	line-height: 1.15;
+}
+
+.trader-journal-dashboard-metric--positive strong {
+	color: var(--text-success);
+}
+
+.trader-journal-dashboard-metric--negative strong {
+	color: var(--text-error);
+}
+
+.trader-journal-dashboard__content-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+	gap: 16px;
+	align-items: start;
+	min-width: 0;
+	width: 100%;
+}
+
+.trader-journal-dashboard__content-grid > * {
+	max-width: 100%;
+	min-width: 0;
+}
+
+.trader-journal-dashboard__panel {
+	min-width: 0;
+	padding: 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-secondary);
+}
+
+.trader-journal-dashboard__panel h3 {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+.trader-journal-dashboard__panel h3 span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+}
+
+.trader-journal-dashboard__list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+button.trader-journal-dashboard-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	padding: 10px;
+	border: 1px solid transparent;
+	border-radius: 7px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-align: left;
+}
+
+button.trader-journal-dashboard-row:hover,
+button.trader-journal-dashboard-row:focus-visible {
+	border-color: var(--background-modifier-border);
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+}
+
+.trader-journal-dashboard-row__primary,
+.trader-journal-dashboard-row__secondary {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.trader-journal-dashboard-row__primary span {
+	overflow: hidden;
+	color: var(--text-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trader-journal-dashboard-row__secondary {
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard-row__rr {
+	color: var(--text-normal);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.trader-journal-dashboard-row__result--win {
+	color: var(--text-success);
+}
+
+.trader-journal-dashboard-row__result--loss {
+	color: var(--text-error);
+}
+
+.trader-journal-dashboard-row__result--open {
+	color: var(--text-accent);
+}
+
+.trader-journal-dashboard__attention {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+	gap: 12px;
+	min-width: 0;
+	width: 100%;
+}
+
+.trader-journal-dashboard-attention {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	padding: 13px 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-secondary);
+}
+
+.trader-journal-dashboard-attention strong {
+	font-size: 1.35rem;
+}
+
+.trader-journal-dashboard-attention span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard-attention.is-active {
+	border-color: color-mix(in srgb, var(--color-orange) 55%, var(--background-modifier-border));
+}
+
+.trader-journal-dashboard-attention.is-active strong {
+	color: var(--color-orange);
+}
+
+.trader-journal-dashboard__performance {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+}
+
+.trader-journal-dashboard__section-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.trader-journal-dashboard__section-header h3,
+.trader-journal-dashboard__section-header p {
+	margin: 0;
+}
+
+.trader-journal-dashboard__section-header p {
+	margin-top: 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard__performance .trader-journal-dashboard__filters {
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+
+.trader-journal-dashboard__plan-overview {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.trader-journal-dashboard__plan-metrics {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(90px, 100%), 1fr));
+	gap: 8px;
+	min-width: 0;
+	width: 100%;
+}
+
+.trader-journal-dashboard-plan-metric {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+	padding: 10px;
+	border-radius: 7px;
+	background: var(--background-primary-alt);
+}
+
+.trader-journal-dashboard-plan-metric strong {
+	font-size: 1.15rem;
+}
+
+.trader-journal-dashboard-plan-metric span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-dashboard-plan-metric--accent strong {
+	color: var(--text-accent);
+}
+
+.trader-journal-dashboard__metric-note {
+	margin: -6px 0 0;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-dashboard__plan-alert {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 9px 11px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--color-orange) 12%, transparent);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard__plan-alert strong {
+	color: var(--color-orange);
+}
+
+.trader-journal-dashboard__subheading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.trader-journal-dashboard__subheading h4 {
+	margin: 0;
+}
+
+.trader-journal-dashboard__subheading > span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard__plan-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
+	gap: 10px;
+	min-width: 0;
+	width: 100%;
+}
+
+.trader-journal-dashboard-plan-card {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+	padding: 13px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 9px;
+	background: var(--background-primary);
+}
+
+.trader-journal-dashboard-plan-card--attention {
+	border-left: 3px solid var(--color-orange);
+}
+
+.trader-journal-dashboard-plan-card__header,
+.trader-journal-dashboard-plan-card__footer,
+.trader-journal-dashboard-plan-card__identity,
+.trader-journal-dashboard-plan-card__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.trader-journal-dashboard-plan-card__header,
+.trader-journal-dashboard-plan-card__footer {
+	justify-content: space-between;
+}
+
+.trader-journal-dashboard-plan-card__header > div {
+	min-width: 0;
+}
+
+.trader-journal-dashboard-plan-card__identity span,
+.trader-journal-dashboard-plan-card__status {
+	padding: 2px 6px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-dashboard-plan-card__status {
+	flex: 0 0 auto;
+	color: var(--text-accent);
+}
+
+.trader-journal-dashboard-plan-card h5 {
+	margin: 5px 0 0;
+	overflow: hidden;
+	font-size: var(--font-ui-medium);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trader-journal-dashboard-plan-card__details {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px 12px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-dashboard-plan-card__footer > span {
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-dashboard-plan-card__footer > span.is-attention {
+	color: var(--color-orange);
+}
+
+.trader-journal-dashboard-plan-card__footer > span.is-linked {
+	color: var(--text-success);
+}
+
+@media (max-width: 900px) {
+	.trader-journal-dashboard__header {
+		flex-direction: column;
+	}
+
+	.trader-journal-dashboard__quick-actions {
+		justify-content: flex-start;
+	}
+
+}
+
+@media (max-width: 600px) {
+	.trader-journal-dashboard-view {
+		padding: 12px;
+	}
+
+	.trader-journal-dashboard {
+		gap: 14px;
+	}
+
+	.trader-journal-dashboard__quick-actions {
+		width: 100%;
+	}
+
+	.trader-journal-dashboard__filters,
+	.trader-journal-dashboard__panel,
+	.trader-journal-dashboard-metric {
+		padding: 12px;
+	}
+
+	button.trader-journal-dashboard-row {
+		grid-template-columns: 1fr;
+		gap: 5px;
+	}
+
+	.trader-journal-dashboard-row__secondary {
+		justify-content: space-between;
+	}
+
+	.trader-journal-dashboard__section-header,
+	.trader-journal-dashboard-plan-card__footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.trader-journal-dashboard-plan-card__actions {
+		justify-content: flex-end;
+	}
+}
+
+@container trader-journal-dashboard-view (max-width: 600px) {
+	.trader-journal-dashboard {
+		gap: 14px;
+	}
+
+	.trader-journal-dashboard__quick-actions {
+		width: 100%;
+	}
+
+	.trader-journal-dashboard__filters,
+	.trader-journal-dashboard__panel,
+	.trader-journal-dashboard-metric {
+		padding: 12px;
+	}
+
+	button.trader-journal-dashboard-row {
+		grid-template-columns: 1fr;
+		gap: 5px;
+	}
+
+	.trader-journal-dashboard-row__secondary {
+		justify-content: space-between;
+	}
+
+	.trader-journal-dashboard__section-header,
+	.trader-journal-dashboard-plan-card__footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.trader-journal-dashboard-plan-card__actions {
+		justify-content: flex-end;
+	}
+}

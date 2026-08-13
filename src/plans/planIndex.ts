@@ -39,6 +39,7 @@ export interface JournalPlanSnapshot {
 	daysByDate: Record<string, JournalCalendarPlanDay>;
 	dayDates: string[];
 	planCount: number;
+	plans: JournalCalendarPlan[];
 }
 
 interface JournalPlanFileEntry {
@@ -89,11 +90,11 @@ export class JournalPlanIndex {
 
 	getSnapshot(): JournalPlanSnapshot {
 		const daysByDate: Record<string, JournalCalendarPlanDay> = {};
-		let planCount = 0;
+		const plans: JournalCalendarPlan[] = [];
 
 		for (const entry of this.entriesByPath.values()) {
 			for (const plan of entry.plans) {
-				planCount += 1;
+				plans.push(plan);
 				for (const date of getPlanDisplayDates(plan)) {
 					const day =
 						daysByDate[date] ??
@@ -135,7 +136,8 @@ export class JournalPlanIndex {
 		return {
 			daysByDate,
 			dayDates: Object.keys(daysByDate).sort(),
-			planCount,
+			planCount: plans.length,
+			plans: plans.sort((first, second) => second.sortTime - first.sortTime),
 		};
 	}
 

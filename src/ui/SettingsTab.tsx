@@ -170,6 +170,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 					value={journalFolder}
 					placeholder="Trading/Backtests"
 					onChange={(event: ChangeEvent<HTMLInputElement>) => saveJournalFolder(event.target.value)}
+					onBlur={() => plugin.journalDataService.refreshIfStarted()}
 				/>
 			</label>
 
@@ -181,6 +182,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 					value={liveJournalFolder}
 					placeholder="Trading/Live"
 					onChange={(event: ChangeEvent<HTMLInputElement>) => saveLiveJournalFolder(event.target.value)}
+					onBlur={() => plugin.journalDataService.refreshIfStarted()}
 				/>
 			</label>
 
@@ -192,6 +194,7 @@ function SettingsView({ plugin }: SettingsViewProps) {
 					value={planFolder}
 					placeholder="Trading/Live/_plans"
 					onChange={(event: ChangeEvent<HTMLInputElement>) => savePlanFolder(event.target.value)}
+					onBlur={() => plugin.journalDataService.refreshIfStarted()}
 				/>
 			</label>
 

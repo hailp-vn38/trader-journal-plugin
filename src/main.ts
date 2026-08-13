@@ -13,6 +13,8 @@ import { registerPlanBlockProcessor } from './plans/planBlockProcessor';
 import { getTranslator } from './i18n';
 import { EconomicCalendarService } from './economicCalendar/api';
 import type { EconomicCalendarCache } from './economicCalendar/types';
+import { JournalDataService } from './journal/JournalDataService';
+import { registerTraderJournalDashboardView } from './dashboard/DashboardView';
 
 interface TraderJournalPluginData {
 	settings: TraderJournalSettings;
@@ -25,11 +27,13 @@ export default class TraderJournalPlugin extends Plugin {
 	economicCalendarCache: EconomicCalendarCache | null = null;
 	economicCalendarLastRequestAt: string | null = null;
 	economicCalendarService!: EconomicCalendarService;
+	journalDataService!: JournalDataService;
 	private saveQueue: Promise<void> = Promise.resolve();
 
 	async onload() {
 		await this.loadSettings();
 		this.economicCalendarService = new EconomicCalendarService(this);
+		this.journalDataService = new JournalDataService(this);
 		const tr = getTranslator(this.settings.language);
 
 		this.addRibbonIcon(TRADER_JOURNAL_CALENDAR_ICON, tr('command.openTradeCalendar'), () => {
@@ -37,6 +41,7 @@ export default class TraderJournalPlugin extends Plugin {
 		});
 
 		registerTraderJournalCalendarView(this);
+		registerTraderJournalDashboardView(this);
 		registerCommands(this);
 		this.app.workspace.onLayoutReady(() => registerAutoStatsRebuild(this));
 		registerTradeBlockProcessor(this);

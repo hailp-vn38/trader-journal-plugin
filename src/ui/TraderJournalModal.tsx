@@ -241,8 +241,8 @@ function TraderJournalModalContent({
 			return;
 		}
 		const symbol = normalizeSymbol(form.symbol);
-		const journalDate = getTodayDateInput();
 		const openedAt = toLocalIsoString(form.openedAt);
+		const journalDate = getDateTimeDatePart(form.openedAt) || getTodayDateInput();
 		const closedAt = isLiveTradeClosed ? toLocalIsoString(form.closedAt) : '';
 		const rr = isLiveJournal ? liveRr : Number(form.rr);
 		if (rr === null) {

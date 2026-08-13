@@ -1,5 +1,5 @@
-import type { EventRef, Events, TAbstractFile, WorkspaceLeaf } from 'obsidian';
-import { ItemView, MarkdownView, Notice, setIcon, TFile } from 'obsidian';
+import type { Events, WorkspaceLeaf } from 'obsidian';
+import { ItemView, MarkdownView, Notice, setIcon } from 'obsidian';
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KeyboardEvent, MouseEvent } from 'react';
@@ -21,13 +21,11 @@ import {
 	getWeekdayLabels,
 } from '../i18n';
 import {
-	JournalCalendarIndex,
 	type JournalCalendarDay,
 	type JournalCalendarSnapshot,
 	type JournalCalendarTrade,
 } from '../trades/journalIndex';
 import {
-	JournalPlanIndex,
 	type JournalCalendarPlan,
 	type JournalCalendarPlanDay,
 	type JournalPlanSnapshot,
@@ -43,20 +41,6 @@ import type { EconomicCalendarEvent, EconomicImpact } from '../economicCalendar/
 
 export const TRADER_JOURNAL_CALENDAR_VIEW_TYPE = 'trader-journal-calendar';
 export const TRADER_JOURNAL_CALENDAR_ICON = 'calendar-clock';
-
-const FILE_UPDATE_DEBOUNCE_MS = 250;
-
-const EMPTY_SNAPSHOT: JournalCalendarSnapshot = {
-	daysByDate: {},
-	dayDates: [],
-	tradeCount: 0,
-};
-
-const EMPTY_PLAN_SNAPSHOT: JournalPlanSnapshot = {
-	daysByDate: {},
-	dayDates: [],
-	planCount: 0,
-};
 
 type TradeCalendarFilter = TradeJournalType;
 
@@ -140,9 +124,10 @@ export class TraderJournalCalendarView extends ItemView {
 }
 
 function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
+	const initialJournalData = plugin.journalDataService.getSnapshot();
 	const [today, setToday] = useState(() => formatDateKey(new Date()));
-	const [snapshot, setSnapshot] = useState<JournalCalendarSnapshot>(EMPTY_SNAPSHOT);
-	const [planSnapshot, setPlanSnapshot] = useState<JournalPlanSnapshot>(EMPTY_PLAN_SNAPSHOT);
+	const [snapshot, setSnapshot] = useState<JournalCalendarSnapshot>(initialJournalData.trades);
+	const [planSnapshot, setPlanSnapshot] = useState<JournalPlanSnapshot>(initialJournalData.plans);
 	const [selectedDate, setSelectedDate] = useState(today);
 	const [visibleMonth, setVisibleMonth] = useState(getMonthKey(today));
 	const [journalTypeFilter, setJournalTypeFilter] = useState<TradeCalendarFilter>('live');
@@ -159,7 +144,7 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const [todayScrollRequest, setTodayScrollRequest] = useState(0);
 	const [selectedDateScrollRequest, setSelectedDateScrollRequest] = useState(0);
 	const [monthStartScrollTarget, setMonthStartScrollTarget] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
+	const [isLoading, setIsLoading] = useState(initialJournalData.isLoading);
 	const initialSelectionAppliedRef = useRef(false);
 	const previousFilterRef = useRef<TradeCalendarFilter>(journalTypeFilter);
 	const horizontalCalendarRef = useRef<HTMLDivElement>(null);
@@ -169,105 +154,11 @@ function TradeCalendarView({ plugin }: TradeCalendarViewProps) {
 	const weekdayLabels = getWeekdayLabels(language);
 
 	useEffect(() => {
-		const tradeIndex = new JournalCalendarIndex(plugin);
-		const planIndex = new JournalPlanIndex(plugin);
-		const fileUpdateTimers = new Map<string, number>();
-		let disposed = false;
-
-		const applyTradeSnapshot = (nextSnapshot: JournalCalendarSnapshot) => {
-			if (!disposed) {
-				setSnapshot(nextSnapshot);
-			}
-		};
-
-		const applyPlanSnapshot = (nextSnapshot: JournalPlanSnapshot) => {
-			if (!disposed) {
-				setPlanSnapshot(nextSnapshot);
-			}
-		};
-
-		const rebuild = async () => {
-			try {
-				setIsLoading(true);
-				const [nextTradeSnapshot, nextPlanSnapshot] = await Promise.all([
-					tradeIndex.rebuild(),
-					planIndex.rebuild(),
-				]);
-				applyTradeSnapshot(nextTradeSnapshot);
-				applyPlanSnapshot(nextPlanSnapshot);
-			} finally {
-				if (!disposed) {
-					setIsLoading(false);
-				}
-			}
-		};
-
-		const updateFile = async (file: TFile) => {
-			const [nextTradeSnapshot, nextPlanSnapshot] = await Promise.all([
-				tradeIndex.updateFile(file),
-				planIndex.updateFile(file),
-			]);
-			applyTradeSnapshot(nextTradeSnapshot);
-			applyPlanSnapshot(nextPlanSnapshot);
-		};
-
-		const scheduleFileUpdate = (file: TFile) => {
-			const existingTimer = fileUpdateTimers.get(file.path);
-			if (existingTimer !== undefined) {
-				window.clearTimeout(existingTimer);
-			}
-
-			const timer = window.setTimeout(() => {
-				fileUpdateTimers.delete(file.path);
-				void updateFile(file).catch((error: unknown) => {
-					console.error('Trader Journal failed to update calendar index', error);
-				});
-			}, FILE_UPDATE_DEBOUNCE_MS);
-
-			fileUpdateTimers.set(file.path, timer);
-		};
-
-		const eventRefs: EventRef[] = [
-			plugin.app.vault.on('create', (file: TAbstractFile) => {
-				if (file instanceof TFile) {
-					scheduleFileUpdate(file);
-				}
-			}),
-			plugin.app.vault.on('modify', (file: TAbstractFile) => {
-				if (file instanceof TFile) {
-					scheduleFileUpdate(file);
-				}
-			}),
-			plugin.app.vault.on('delete', (file: TAbstractFile) => {
-				applyTradeSnapshot(tradeIndex.removePath(file.path));
-				applyPlanSnapshot(planIndex.removePath(file.path));
-			}),
-			plugin.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
-				applyTradeSnapshot(tradeIndex.removePath(oldPath));
-				applyPlanSnapshot(planIndex.removePath(oldPath));
-				if (file instanceof TFile) {
-					scheduleFileUpdate(file);
-				}
-			}),
-		];
-
-		void rebuild().catch((error: unknown) => {
-			console.error('Trader Journal failed to build calendar index', error);
-			if (!disposed) {
-				setIsLoading(false);
-			}
+		return plugin.journalDataService.subscribe((journalData) => {
+			setSnapshot(journalData.trades);
+			setPlanSnapshot(journalData.plans);
+			setIsLoading(journalData.isLoading);
 		});
-
-		return () => {
-			disposed = true;
-			for (const timer of fileUpdateTimers.values()) {
-				window.clearTimeout(timer);
-			}
-			fileUpdateTimers.clear();
-			for (const eventRef of eventRefs) {
-				plugin.app.vault.offref(eventRef);
-			}
-		};
 	}, [plugin]);
 
 	useEffect(() => {

@@ -345,7 +345,7 @@ function buildRebuiltNote(
 	}
 
 	const identity = getJournalIdentity(file, parsedFrontmatter, trades, fallbackIdentity);
-	const stats = calculateDailyTradeStats(trades, extractedTrades.invalidTradeBlockCount);
+	const stats = calculateDailyTradeStats(trades, extractedTrades.invalidTradeBlockCount, identity.journalType);
 	const metadata = createDailyMetadata(identity, stats, parsedFrontmatter);
 	const summary = renderDailySummary(identity.symbol, identity.journalDate, identity.journalType, stats, language);
 	const bodyWithSummary = upsertSummary(ensureTradesSection(body), summary);
@@ -489,12 +489,17 @@ function ensureTradesSection(body: string): string {
 	return `${body.trimEnd()}\n\n## Trades\n`;
 }
 
-function calculateDailyTradeStats(trades: TradeEntry[], invalidTradeBlockCount: number): DailyTradeStats {
-	const rrValues = trades.map((trade) => getSignedRr(trade));
+function calculateDailyTradeStats(
+	trades: TradeEntry[],
+	invalidTradeBlockCount: number,
+	journalType: TradeJournalType,
+): DailyTradeStats {
+	const completedTrades = trades.filter((trade) => isTradeIncludedInOutcomeStats(trade, journalType));
+	const rrValues = completedTrades.map((trade) => getSignedRr(trade));
 	const netRr = rrValues.reduce((total, rr) => total + rr, 0);
-	const winCount = trades.filter((trade) => getResultKey(trade) === 'win').length;
-	const lossCount = trades.filter((trade) => getResultKey(trade) === 'loss').length;
-	const breakevenCount = trades.filter((trade) => getResultKey(trade) === 'breakeven').length;
+	const winCount = completedTrades.filter((trade) => getResultKey(trade) === 'win').length;
+	const lossCount = completedTrades.filter((trade) => getResultKey(trade) === 'loss').length;
+	const breakevenCount = completedTrades.filter((trade) => getResultKey(trade) === 'breakeven').length;
 	const tags = [...new Set(trades.flatMap((trade) => formatTags(trade.tags)))].sort();
 
 	return {
@@ -504,12 +509,28 @@ function calculateDailyTradeStats(trades: TradeEntry[], invalidTradeBlockCount: 
 		breakevenCount,
 		invalidTradeBlockCount,
 		netRr,
-		averageRr: trades.length ? netRr / trades.length : 0,
+		averageRr: completedTrades.length ? netRr / completedTrades.length : 0,
 		bestRr: rrValues.length ? Math.max(...rrValues) : null,
 		worstRr: rrValues.length ? Math.min(...rrValues) : null,
-		winRate: trades.length ? (winCount / trades.length) * 100 : 0,
+		winRate: completedTrades.length ? (winCount / completedTrades.length) * 100 : 0,
 		tags,
 	};
+}
+
+function isTradeIncludedInOutcomeStats(trade: TradeEntry, journalType: TradeJournalType): boolean {
+	if (journalType !== 'live') {
+		return true;
+	}
+
+	if (trade.status === 'closed') {
+		return true;
+	}
+
+	if (trade.status === 'open') {
+		return false;
+	}
+
+	return Boolean(stringifyValue(trade.closed_at));
 }
 
 function getSignedRr(trade: TradeEntry): number {

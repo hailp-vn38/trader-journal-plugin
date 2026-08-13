@@ -6,6 +6,7 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 
 - Add backtest trades from an Obsidian modal.
 - Add live trades from a separate modal flow.
+- Open a responsive trading dashboard with performance metrics, attention indicators, recent trades, active-plan cards, and plan execution statistics.
 - Open a sidebar calendar with filter-specific trade, plan, and economic-event indicators.
 - Show this week's economic events alongside trades, filtered by country/currency and impact.
 - Edit live trades from the sidebar calendar or rendered Markdown cards.
@@ -22,7 +23,7 @@ Trader Journal is an Obsidian plugin for recording backtest and live trades in M
 
 ## Storage Layout
 
-Journal files are created under the configured backtest or live journal folder. The daily file date is the day you record the journal entry, not necessarily the trade execution date inside the trade data.
+Journal files are created under the configured backtest or live journal folder. For new trades, the daily file date (`journalDate`) is derived from the date portion of `opened_at` and is treated as the actual trade date throughout the dashboard and calendar.
 
 ```text
 Trading/Backtests/
@@ -90,12 +91,15 @@ Live trade RR is calculated automatically from actual risk. While a trade is ope
 
 Live trade status is derived from `closed_at`: a blank value means `open`, while setting a closing time makes the trade `closed`.
 
+Open live trades are included in total trade counts, but excluded from win rate, net RR, average RR, best RR, and worst RR until they are closed.
+
 Backtest daily note properties include `backtest_start_date` and `backtest_end_date` with empty values so users can manually record the date range of the backtested data.
 
 ## Commands
 
 - **Add backtest trade**: Opens the trade entry modal.
 - **Add live trade**: Opens the live trade entry modal.
+- **Open trading dashboard**: Opens the main dashboard in a workspace tab.
 - **Open trade calendar**: Opens the sidebar calendar view.
 - **Recalculate current stats**: Rebuilds the summary and frontmatter statistics for the active journal note.
 
