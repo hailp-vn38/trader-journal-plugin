@@ -7,6 +7,7 @@ import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
 import { TradePlanModal } from './TradePlanModal';
 import { TraderJournalModal } from './TraderJournalModal';
+import { TradeReviewModal } from './TradeReviewModal';
 import {
 	CALENDAR_DISPLAY_MODE_CHANGE_EVENT,
 	ECONOMIC_CALENDAR_SETTINGS_CHANGE_EVENT,
@@ -1021,6 +1022,9 @@ function TradeCalendarCard({
 	const openEditModal = () => {
 		new TraderJournalModal(plugin.app, plugin, 'live', trade.trade, trade.filePath).open();
 	};
+	const openReviewModal = () => {
+		new TradeReviewModal(plugin.app, plugin, trade.trade, trade.filePath).open();
+	};
 
 	return (
 		<div
@@ -1045,6 +1049,15 @@ function TradeCalendarCard({
 							variant="plain"
 						/>
 					) : null}
+					{trade.journalType === 'live' && trade.status === 'closed' ? (
+						<CalendarIconButton
+							icon={trade.reviewed ? 'clipboard-check' : 'clipboard-pen'}
+							label={tr('action.reviewTrade')}
+							onClick={openReviewModal}
+							stopPropagation
+							variant="plain"
+						/>
+					) : null}
 					{trade.status ? (
 						<span
 							className={[
@@ -1052,9 +1065,14 @@ function TradeCalendarCard({
 								`trader-journal-calendar-card__status--${trade.status}`,
 							].join(' ')}
 						>
-							{trade.status === 'open' ? tr('option.open') : tr('option.closed')}
-						</span>
-					) : null}
+						{trade.status === 'open' ? tr('option.open') : tr('option.closed')}
+					</span>
+				) : null}
+				{trade.journalType === 'live' && trade.status === 'closed' && !trade.reviewed ? (
+					<span className="trader-journal-calendar-card__status trader-journal-calendar-card__status--review">
+						{tr('dashboard.unreviewed')}
+					</span>
+				) : null}
 					<span className="trader-journal-calendar-card__time">{formatTradeTime(trade.createdAt)}</span>
 				</div>
 			</div>

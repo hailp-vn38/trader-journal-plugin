@@ -61,6 +61,7 @@ export const KNOWN_TRADE_FIELDS = new Set([
 	'holding_time',
 	'backtest_start_date',
 	'backtest_end_date',
+	'review',
 ]);
 
 export function parseTradeJson(source: string): { trade: TradeEntry | null; error: string | null } {

@@ -3,3 +3,4 @@ import './journalDataService.test';
 import './planRange.test';
 import './async.test';
 import './noteType.test';
+import './review.test';

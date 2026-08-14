@@ -10,18 +10,25 @@ import type { TradeJournalType } from '../trades/types';
 import { TradePlanModal } from '../ui/TradePlanModal';
 import { TradeSetupModal } from '../ui/TradeSetupModal';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
+import { TradeReviewModal } from '../ui/TradeReviewModal';
 import { openTraderJournalCalendar } from '../ui/TradeCalendarView';
 import {
 	getDashboardMetrics,
 	getDashboardSymbols,
 	getDashboardTrades,
+	filterRecentTrades,
+	DEFAULT_RECENT_TRADE_FILTERS,
 	getOpenLiveTradeCount,
+	getUnreviewedClosedLiveTradeCount,
 	getPlanMetrics,
 	type DashboardPeriod,
+	type RecentTradeFilters as RecentTradeFilterState,
 } from './dashboardStats';
 import { PlanOverview } from './PlanOverview';
 import { DashboardIconButton } from './DashboardIconButton';
 import { SetupOverview } from './SetupOverview';
+import { ReviewInsights } from './ReviewInsights';
+import { RecentTradeFilters } from './RecentTradeFilters';
 
 interface DashboardProps {
 	plugin: TraderJournalPlugin;
@@ -34,6 +41,9 @@ export function Dashboard({ plugin }: DashboardProps) {
 	const [journalType, setJournalType] = useState<TradeJournalType>('live');
 	const [period, setPeriod] = useState<DashboardPeriod>('30d');
 	const [symbol, setSymbol] = useState('');
+	const [recentTradeFilters, setRecentTradeFilters] = useState<RecentTradeFilterState>(() => ({
+		...DEFAULT_RECENT_TRADE_FILTERS,
+	}));
 	const tr = getTranslator(language);
 	const locale = getLocale(language);
 
@@ -57,6 +67,15 @@ export function Dashboard({ plugin }: DashboardProps) {
 		[journalData.trades, journalType, period, symbol],
 	);
 	const metrics = useMemo(() => getDashboardMetrics(trades), [trades]);
+	const recentSetupOptions = useMemo(
+		() => [...new Set(trades.map((trade) => trade.setup).filter(Boolean))]
+			.sort((first, second) => first.localeCompare(second)),
+		[trades],
+	);
+	const recentTrades = useMemo(
+		() => filterRecentTrades(trades, recentTradeFilters),
+		[recentTradeFilters, trades],
+	);
 	const planMetrics = useMemo(
 		() => getPlanMetrics(journalData.plans, symbol),
 		[journalData.plans, symbol],
@@ -65,12 +84,27 @@ export function Dashboard({ plugin }: DashboardProps) {
 		() => getOpenLiveTradeCount(journalData.trades, symbol),
 		[journalData.trades, symbol],
 	);
+	const unreviewedClosedTradeCount = useMemo(
+		() => getUnreviewedClosedLiveTradeCount(journalData.trades, symbol),
+		[journalData.trades, symbol],
+	);
 
 	useEffect(() => {
 		if (symbol && !symbols.includes(symbol)) {
 			setSymbol('');
 		}
 	}, [symbol, symbols]);
+
+	useEffect(() => {
+		setRecentTradeFilters((current) => {
+			const nextOutcome = journalType === 'backtest' && current.outcome === 'open' ? 'all' : current.outcome;
+			const nextSetup = current.setup && !recentSetupOptions.includes(current.setup) ? '' : current.setup;
+			if (nextOutcome === current.outcome && nextSetup === current.setup) {
+				return current;
+			}
+			return { ...current, outcome: nextOutcome, setup: nextSetup };
+		});
+	}, [journalType, recentSetupOptions]);
 
 	return (
 		<div className="trader-journal-dashboard">
@@ -113,6 +147,7 @@ export function Dashboard({ plugin }: DashboardProps) {
 
 			<section className="trader-journal-dashboard__attention" aria-label={tr('dashboard.attention')}>
 				<AttentionCard label={tr('dashboard.openLiveTrades')} value={openLiveTradeCount} />
+				<AttentionCard label={tr('dashboard.unreviewedClosedTrades')} value={unreviewedClosedTradeCount} />
 				<AttentionCard label={tr('dashboard.plansNeedTrade')} value={planMetrics.openWithoutTradesCount} />
 			</section>
 
@@ -154,10 +189,13 @@ export function Dashboard({ plugin }: DashboardProps) {
 				</div>
 			</section>
 
+			{journalType === 'live' ? <ReviewInsights language={language} trades={trades} /> : null}
+
 			<PlanOverview
 				language={language}
 				plugin={plugin}
 				snapshot={journalData.plans}
+				tradeSnapshot={journalData.trades}
 				symbol={symbol}
 			/>
 
@@ -173,13 +211,27 @@ export function Dashboard({ plugin }: DashboardProps) {
 							onClick={() => new TraderJournalModal(plugin.app, plugin, journalType).open()}
 						/>
 					</div>
-					{trades.length ? (
+					<RecentTradeFilters
+						filters={recentTradeFilters}
+						journalType={journalType}
+						language={language}
+						matchedCount={recentTrades.length}
+						onChange={setRecentTradeFilters}
+						onReset={() => setRecentTradeFilters({ ...DEFAULT_RECENT_TRADE_FILTERS })}
+						setupOptions={recentSetupOptions}
+						totalCount={trades.length}
+					/>
+					{recentTrades.length ? (
 						<div className="trader-journal-dashboard__list">
-							{trades.slice(0, 10).map((trade) => (
+							{recentTrades.slice(0, 10).map((trade) => (
 								<RecentTradeRow trade={trade} locale={locale} plugin={plugin} key={`${trade.filePath}:${trade.id}`} />
 							))}
 						</div>
-					) : <p className="trader-journal-dashboard__empty">{tr('dashboard.emptyTrades')}</p>}
+					) : (
+						<p className="trader-journal-dashboard__empty">
+							{tr(trades.length ? 'dashboard.emptyFilteredTrades' : 'dashboard.emptyTrades')}
+						</p>
+					)}
 				</section>
 
 				<SetupOverview language={language} plugin={plugin} />
@@ -233,6 +285,9 @@ function RecentTradeRow({ trade, locale, plugin }: { trade: JournalCalendarTrade
 				<span className={`trader-journal-dashboard-row__result trader-journal-dashboard-row__result--${trade.resultKey ?? 'open'}`}>
 					{trade.status === 'open' ? tr('option.open') : trade.result || '—'}
 				</span>
+				{trade.journalType === 'live' && trade.status === 'closed' && !trade.reviewed ? (
+					<span className="trader-journal-dashboard-row__review-status">{tr('dashboard.unreviewed')}</span>
+				) : null}
 				<span className="trader-journal-dashboard-row__rr">{trade.rr || '—'}</span>
 			</span>
 			<span className="trader-journal-dashboard-row__actions" onClick={stopRowClick}>
@@ -242,6 +297,14 @@ function RecentTradeRow({ trade, locale, plugin }: { trade: JournalCalendarTrade
 					size="compact"
 					onClick={() => new TraderJournalModal(plugin.app, plugin, trade.journalType, trade.trade, trade.filePath).open()}
 				/>
+				{trade.journalType === 'live' && trade.status === 'closed' ? (
+					<DashboardIconButton
+						icon={trade.reviewed ? 'clipboard-check' : 'clipboard-pen'}
+						label={tr('action.reviewTrade')}
+						size="compact"
+						onClick={() => new TradeReviewModal(plugin.app, plugin, trade.trade, trade.filePath).open()}
+					/>
+				) : null}
 			</span>
 		</div>
 	);

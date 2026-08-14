@@ -81,6 +81,7 @@ function TradeSetupModalContent({
 
 	return (
 		<form className="trader-journal-modal trader-journal-form" onSubmit={handleSubmit}>
+			<div className="trader-journal-form__body">
 			<h2>{tr(isEditing ? 'modal.editTradeSetup' : 'modal.addTradeSetup')}</h2>
 			<p>{tr(isEditing ? 'setup.editDescription' : 'setup.createDescription')}</p>
 			{error ? <div className="trader-journal-form__error">{error}</div> : null}
@@ -150,6 +151,8 @@ function TradeSetupModalContent({
 					onChange={(event: ChangeEvent<HTMLInputElement>) => setTimeframes(event.target.value)}
 				/>
 			</label>
+
+			</div>
 
 			<div className="trader-journal-form__actions">
 				<button type="button" onClick={closeModal} disabled={isSaving}>

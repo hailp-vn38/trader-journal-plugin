@@ -5,11 +5,37 @@ export type TradeResult = 'loss' | 'win' | 'breakeven';
 export type TradeSide = 'long' | 'short';
 export type TradeImageType = 'url' | 'file';
 export type LiveTradeStatus = 'open' | 'closed';
+export type TradeReviewContext = 'correct' | 'partial' | 'wrong';
+export type TradeReviewEntryTiming = 'early' | 'on_time' | 'late';
+export type TradeReviewPlanAdherence = 'followed' | 'partial' | 'not_followed' | 'no_plan';
+export type TradeReviewMistakeTag =
+	| 'wrong_context'
+	| 'early_entry'
+	| 'late_entry'
+	| 'no_confirmation'
+	| 'fomo'
+	| 'revenge_trade'
+	| 'over_risk'
+	| 'moved_stop'
+	| 'cut_winner_early'
+	| 'ignored_plan';
 
 export interface TradeImage {
 	type?: TradeImageType;
 	value?: string;
 	label?: string;
+}
+
+export interface TradeReview {
+	schema_version: 1;
+	context?: TradeReviewContext;
+	entry_timing?: TradeReviewEntryTiming;
+	plan_adherence?: TradeReviewPlanAdherence;
+	mistake_tags?: TradeReviewMistakeTag[];
+	what_went_well?: string;
+	lesson?: string;
+	next_action?: string;
+	reviewed_at: string;
 }
 
 export interface TradeEntry {
@@ -38,6 +64,7 @@ export interface TradeEntry {
 	holding_time?: number | string | null;
 	backtest_start_date?: string | null;
 	backtest_end_date?: string | null;
+	review?: TradeReview;
 	[key: string]: unknown;
 }
 

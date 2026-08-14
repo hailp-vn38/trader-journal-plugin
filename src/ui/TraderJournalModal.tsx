@@ -24,6 +24,12 @@ import type { TradePlanOption } from '../plans/types';
 import type { TradeEntry, TradeImage, TradeJournalType, TradeResult, TradeSide } from '../trades/types';
 import { isSetupAvailableForSymbol, listTradeSetups } from '../setups/storage';
 import type { TradeSetupDefinition } from '../setups/types';
+import {
+	TradeReviewFields,
+	buildTradeReview,
+	createTradeReviewFormState,
+} from './TradeReviewFields';
+import type { TradeReviewFormState } from './TradeReviewFields';
 
 const SIDE_OPTIONS: TradeSide[] = ['long', 'short'];
 const RESULT_OPTIONS: TradeResult[] = ['loss', 'win', 'breakeven'];
@@ -54,6 +60,7 @@ interface TradeFormState {
 	notes: string;
 	openedAt: string;
 	closedAt: string;
+	review: TradeReviewFormState;
 }
 
 function TraderJournalModalContent({
@@ -368,6 +375,9 @@ function TraderJournalModalContent({
 			trade.entry_price = Number(form.entryPrice);
 			trade.stop_loss = Number(form.stopLoss);
 			trade.take_profit = Number(form.takeProfit);
+			if (isLiveTradeClosed) {
+				trade.review = buildTradeReview(form.review, getCurrentLocalIsoString());
+			}
 		}
 
 		try {
@@ -392,6 +402,7 @@ function TraderJournalModalContent({
 
 	return (
 		<form className="trader-journal-modal trader-journal-form" onSubmit={handleSubmit}>
+			<div className="trader-journal-form__body">
 			<h2>
 				{isEditing
 					? tr(isLiveJournal ? 'modal.editLiveTrade' : 'modal.editBacktestTrade')
@@ -656,13 +667,23 @@ function TraderJournalModalContent({
 			</div>
 
 			<label className="trader-journal-field">
-				<span>{tr('detail.notes')}</span>
+				<span>{tr(isLiveJournal ? 'detail.executionNotes' : 'detail.notes')}</span>
 				<textarea
 					value={form.notes}
 					rows={4}
 					onChange={(event: ChangeEvent<HTMLTextAreaElement>) => updateField('notes', event.target.value)}
 				/>
 			</label>
+
+			{isLiveJournal && isLiveTradeClosed ? (
+				<TradeReviewFields
+					value={form.review}
+					onChange={(review) => updateField('review', review)}
+					tr={tr}
+				/>
+			) : null}
+
+			</div>
 
 			<div className="trader-journal-form__actions">
 				<button type="button" onClick={closeModal} disabled={isSaving || isPastingImage}>
@@ -747,6 +768,7 @@ function createInitialForm(
 		notes: stringifyValue(initialTrade?.notes),
 		openedAt: toDateTimeLocalInput(initialTrade?.opened_at),
 		closedAt: toDateTimeLocalInput(initialTrade?.closed_at),
+		review: createTradeReviewFormState(initialTrade?.review),
 	};
 }
 

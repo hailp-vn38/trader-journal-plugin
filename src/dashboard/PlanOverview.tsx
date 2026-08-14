@@ -3,8 +3,9 @@ import type TraderJournalPlugin from '../main';
 import { getLocale, getTranslator } from '../i18n';
 import type { JournalCalendarPlan, JournalPlanSnapshot } from '../plans/planIndex';
 import type { TraderJournalLanguage } from '../settings';
+import type { JournalCalendarSnapshot } from '../trades/journalIndex';
 import { TradePlanModal } from '../ui/TradePlanModal';
-import { getOpenPlans, getPlanMetrics } from './dashboardStats';
+import { getOpenPlans, getPlanMetrics, getTradePlanLinkMetrics } from './dashboardStats';
 import { DashboardIconButton } from './DashboardIconButton';
 import type { KeyboardEvent, MouseEvent } from 'react';
 
@@ -12,13 +13,15 @@ interface PlanOverviewProps {
 	language: TraderJournalLanguage;
 	plugin: TraderJournalPlugin;
 	snapshot: JournalPlanSnapshot;
+	tradeSnapshot: JournalCalendarSnapshot;
 	symbol: string;
 }
 
-export function PlanOverview({ language, plugin, snapshot, symbol }: PlanOverviewProps) {
+export function PlanOverview({ language, plugin, snapshot, tradeSnapshot, symbol }: PlanOverviewProps) {
 	const tr = getTranslator(language);
 	const metrics = getPlanMetrics(snapshot, symbol);
 	const openPlans = getOpenPlans(snapshot, symbol);
+	const tradePlanMetrics = getTradePlanLinkMetrics(tradeSnapshot, symbol);
 
 	return (
 		<section className="trader-journal-dashboard__panel trader-journal-dashboard__plan-overview">
@@ -63,6 +66,16 @@ export function PlanOverview({ language, plugin, snapshot, symbol }: PlanOvervie
 				</div>
 			</div>
 
+			<div className="trader-journal-dashboard__subheading trader-journal-dashboard__trade-plan-heading">
+				<h4>{tr('dashboard.tradePlanLinkage')}</h4>
+				<span>{tr('dashboard.allTime')}</span>
+			</div>
+			<div className="trader-journal-dashboard__trade-plan-metrics">
+				<PlanMetric label={tr('dashboard.linkedLiveTrades')} value={tradePlanMetrics.linkedTradeCount} tone="accent" />
+				<PlanMetric label={tr('dashboard.unplannedLiveTrades')} value={tradePlanMetrics.unplannedTradeCount} />
+				<PlanMetric label={tr('dashboard.tradesPerExecutedPlan')} value={formatDecimal(tradePlanMetrics.tradesPerExecutedPlan)} />
+			</div>
+
 			<div className="trader-journal-dashboard__subheading">
 				<h4>{tr('dashboard.activePlans')}</h4>
 				<span>{openPlans.length}</span>
@@ -87,7 +100,7 @@ function PlanMetric({
 	tone = 'neutral',
 }: {
 	label: string;
-	value: number;
+	value: number | string;
 	tone?: 'accent' | 'neutral';
 }) {
 	return (
@@ -96,6 +109,10 @@ function PlanMetric({
 			<span>{label}</span>
 		</div>
 	);
+}
+
+function formatDecimal(value: number): string {
+	return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
 }
 
 function OpenPlanCard({

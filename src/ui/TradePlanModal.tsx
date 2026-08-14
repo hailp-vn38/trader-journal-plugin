@@ -320,6 +320,7 @@ function TradePlanModalContent({
 
 	return (
 		<form className="trader-journal-modal trader-journal-form" onSubmit={handleSubmit}>
+			<div className="trader-journal-form__body">
 			<h2>{isEditing ? tr('modal.editTradePlan') : tr('modal.addTradePlan')}</h2>
 
 			{error ? <div className="trader-journal-form__error">{error}</div> : null}
@@ -536,6 +537,8 @@ function TradePlanModalContent({
 					</ul>
 				</section>
 			) : null}
+
+			</div>
 
 			<div className="trader-journal-form__actions">
 				<button type="button" onClick={closeModal} disabled={isSaving || isPastingImage}>

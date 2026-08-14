@@ -43,11 +43,13 @@ Trader Journal adds Obsidian wikilinks and tags to these notes, so their relatio
 - Track side, timeframe, result, RR, prices, images, notes, timestamps, and holding time.
 - Calculate live-trade RR from entry, stop-loss, take-profit, or exit prices.
 - Derive live trade status from the closing timestamp.
+- Review closed live trades by context, entry timing, plan adherence, mistakes, lessons, and the next action.
 - Regenerate daily summaries and statistics from the stored trade blocks.
 
 ### Dashboard and calendar
 
 - Review performance metrics, attention indicators, and recent trades in the dashboard.
+- Track closed trades awaiting review, common mistakes, and RR grouped by plan adherence.
 - View reusable setups in the right dashboard column above the plan overview.
 - Review active plans, plan execution rate, and plans without linked trades.
 - Open setup, plan, and trade notes directly from dashboard cards.
@@ -213,6 +215,26 @@ Trades are stored in fenced JSON blocks. The JSON block is the source of truth f
 ````
 
 The generated summary table and frontmatter statistics are rebuilt from these blocks. Invalid JSON blocks are rendered as errors and counted in `invalidTradeBlockCount` instead of being silently excluded.
+
+### Post-trade reviews
+
+Closed live trades can store an optional review inside the same trade block. Keeping the review with the trade preserves a single source of truth and lets the dashboard aggregate process mistakes independently of win/loss results.
+
+```json
+"review": {
+  "schema_version": 1,
+  "context": "wrong",
+  "entry_timing": "early",
+  "plan_adherence": "not_followed",
+  "mistake_tags": ["wrong_context", "early_entry", "no_confirmation"],
+  "what_went_well": "Kept the planned risk and did not move the stop.",
+  "lesson": "The higher-timeframe context was not confirmed.",
+  "next_action": "Wait for the 5m candle to close before entering.",
+  "reviewed_at": "2026-08-14T20:30:00+07:00"
+}
+```
+
+Review is optional while closing a trade. A closed trade without a review appears in the dashboard attention area and can be reviewed later from the trade card, dashboard, or calendar.
 
 Backtest daily note properties also include `backtest_start_date` and `backtest_end_date`, which can be completed manually to record the tested data range.
 

@@ -14,6 +14,7 @@ import type { TraderJournalLanguage } from '../settings';
 import { isPathInFolder } from '../journal/pathScope';
 import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
 import { getTraderJournalNoteType } from '../utils/noteType';
+import { isTradeReviewed } from './review';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -36,6 +37,7 @@ export interface JournalCalendarTrade {
 	createdAt: string;
 	sortTime: number;
 	status: LiveTradeStatus | null;
+	reviewed: boolean;
 	headingLine: number | null;
 	trade: TradeEntry;
 }
@@ -303,6 +305,7 @@ function createCalendarTrade(
 		createdAt,
 		sortTime: parseDateMs(createdAt) ?? file.stat.ctime + index,
 		status: journalType === 'live' ? getLiveTradeStatus(trade) : null,
+		reviewed: isTradeReviewed(trade),
 		headingLine: findTradeHeadingLine(content, trade),
 		trade,
 	};

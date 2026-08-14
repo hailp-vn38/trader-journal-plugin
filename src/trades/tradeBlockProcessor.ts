@@ -2,6 +2,7 @@ import { MarkdownRenderChild, Modal, normalizePath, Notice, setIcon, TFile } fro
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
+import { TradeReviewModal } from '../ui/TradeReviewModal';
 import { getTranslator } from '../i18n';
 import {
 	formatDateTime,
@@ -18,9 +19,18 @@ import {
 	stringifyValue,
 } from './format';
 import { TRADE_CODE_BLOCK_LANGUAGE } from './types';
-import type { NormalizedTradeImage, TradeEntry, TradeJournalType } from './types';
+import type {
+	NormalizedTradeImage,
+	TradeEntry,
+	TradeJournalType,
+	TradeReviewContext,
+	TradeReviewEntryTiming,
+	TradeReviewMistakeTag,
+	TradeReviewPlanAdherence,
+} from './types';
 import { registerImageModalInteraction } from '../ui/imageModalInteraction';
 import { getTradePlanById } from '../plans/storage';
+import { isTradeReviewed, normalizeTradeReview } from './review';
 
 interface DetailItem {
 	label: string;
@@ -59,6 +69,7 @@ function renderTradeBlock(
 	renderTags(cardEl, trade);
 	renderImages(plugin, cardEl, trade, ctx);
 	renderNotes(plugin, cardEl, trade);
+	renderReview(plugin, cardEl, trade);
 	renderExtraFields(plugin, cardEl, trade);
 }
 
@@ -99,6 +110,7 @@ function renderHeader(
 
 	const headerMetaEl = headerEl.createDiv({ cls: 'trader-journal-trade-card__header-meta' });
 	renderEditButton(plugin, headerMetaEl, trade, ctx);
+	renderReviewButton(plugin, headerMetaEl, trade, ctx);
 
 	const badgesEl = headerMetaEl.createDiv({ cls: 'trader-journal-trade-card__badges' });
 	if (result) {
@@ -107,6 +119,45 @@ function renderHeader(
 	if (rr) {
 		renderBadge(badgesEl, rr, 'trader-journal-trade-badge--rr');
 	}
+}
+
+function renderReviewButton(
+	plugin: TraderJournalPlugin,
+	parentEl: HTMLElement,
+	trade: TradeEntry,
+	ctx: MarkdownPostProcessorContext,
+): void {
+	if (
+		!stringifyValue(trade.id) ||
+		getTradeJournalType(plugin, trade, ctx.sourcePath) !== 'live' ||
+		!stringifyValue(trade.closed_at)
+	) {
+		return;
+	}
+
+	const tr = getTranslator(plugin.settings.language);
+	const buttonEl = parentEl.createEl('button', {
+		cls: [
+			'trader-journal-trade-card__edit-button',
+			'trader-journal-trade-card__review-button',
+			isTradeReviewed(trade) ? 'is-reviewed' : 'is-pending',
+		].join(' '),
+		attr: {
+			type: 'button',
+			'aria-label': tr('action.reviewTrade'),
+			title: tr('action.reviewTrade'),
+		},
+	});
+	const iconEl = buttonEl.createSpan({ attr: { 'aria-hidden': 'true' } });
+	setIcon(iconEl, isTradeReviewed(trade) ? 'clipboard-check' : 'clipboard-pen');
+
+	const child = new MarkdownRenderChild(buttonEl);
+	child.registerDomEvent(buttonEl, 'click', (event) => {
+		event.preventDefault();
+		event.stopPropagation();
+		new TradeReviewModal(plugin.app, plugin, trade, ctx.sourcePath).open();
+	});
+	ctx.addChild(child);
 }
 
 function renderEditButton(
@@ -371,6 +422,71 @@ function renderNotes(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: 
 		cls: 'trader-journal-trade-card__notes',
 		text: notes,
 	});
+}
+
+function renderReview(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: TradeEntry): void {
+	const review = normalizeTradeReview(trade.review);
+	if (!review) {
+		return;
+	}
+
+	const tr = getTranslator(plugin.settings.language);
+	const sectionEl = parentEl.createDiv({
+		cls: 'trader-journal-trade-card__section trader-journal-trade-review',
+	});
+	sectionEl.createDiv({
+		cls: 'trader-journal-trade-card__section-title',
+		text: tr('review.title'),
+	});
+	const detailItems: DetailItem[] = [
+		review.context ? { label: tr('review.context'), value: tr(getReviewContextKey(review.context)) } : null,
+		review.entry_timing
+			? { label: tr('review.entryTiming'), value: tr(getReviewEntryTimingKey(review.entry_timing)) }
+			: null,
+		review.plan_adherence
+			? { label: tr('review.planAdherence'), value: tr(getReviewPlanAdherenceKey(review.plan_adherence)) }
+			: null,
+		{ label: tr('review.reviewedAt'), value: formatDateTime(review.reviewed_at) },
+	].filter((item): item is DetailItem => Boolean(item?.value));
+	renderDetailGrid(sectionEl, detailItems);
+
+	if (review.mistake_tags?.length) {
+		const mistakesEl = sectionEl.createDiv({ cls: 'trader-journal-trade-review__mistakes' });
+		mistakesEl.createDiv({ cls: 'trader-journal-trade-review__label', text: tr('review.mistakes') });
+		const chipsEl = mistakesEl.createDiv({ cls: 'trader-journal-trade-review__chips' });
+		for (const mistake of review.mistake_tags) {
+			chipsEl.createSpan({ text: tr(getReviewMistakeKey(mistake)) });
+		}
+	}
+
+	renderReviewText(sectionEl, tr('review.whatWentWell'), review.what_went_well);
+	renderReviewText(sectionEl, tr('review.lesson'), review.lesson);
+	renderReviewText(sectionEl, tr('review.nextAction'), review.next_action);
+}
+
+function renderReviewText(parentEl: HTMLElement, label: string, value: string | undefined): void {
+	if (!value) {
+		return;
+	}
+	const itemEl = parentEl.createDiv({ cls: 'trader-journal-trade-review__text' });
+	itemEl.createDiv({ cls: 'trader-journal-trade-review__label', text: label });
+	itemEl.createDiv({ cls: 'trader-journal-trade-card__notes', text: value });
+}
+
+function getReviewContextKey(value: TradeReviewContext) {
+	return `review.context.${value}` as const;
+}
+
+function getReviewEntryTimingKey(value: TradeReviewEntryTiming) {
+	return `review.entryTiming.${value}` as const;
+}
+
+function getReviewPlanAdherenceKey(value: TradeReviewPlanAdherence) {
+	return `review.planAdherence.${value}` as const;
+}
+
+function getReviewMistakeKey(value: TradeReviewMistakeTag) {
+	return `review.mistake.${value}` as const;
 }
 
 function renderExtraFields(plugin: TraderJournalPlugin, parentEl: HTMLElement, trade: TradeEntry): void {
