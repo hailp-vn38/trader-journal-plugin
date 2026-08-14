@@ -13,6 +13,7 @@ import type { LiveTradeStatus, TradeResult, TradeSide } from './types';
 import type { TraderJournalLanguage } from '../settings';
 import { isPathInFolder } from '../journal/pathScope';
 import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
+import { getTraderJournalNoteType } from '../utils/noteType';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -339,7 +340,7 @@ function getJournalType(
 	frontmatter: Record<string, unknown>,
 	firstTrade: TradeEntry | undefined,
 ): TradeJournalType {
-	const noteType = stringifyValue(frontmatter.type);
+	const noteType = getTraderJournalNoteType(frontmatter);
 	if (noteType === LIVE_NOTE_TYPE) {
 		return 'live';
 	}

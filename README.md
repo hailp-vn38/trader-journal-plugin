@@ -94,7 +94,7 @@ The default setup folder is `Trading/_setups`. The plugin creates a note with ba
 
 ```yaml
 ---
-type: trader-journal-setup
+traderJournalNoteType: trader-journal-setup
 tags:
   - trader-journal-setup
 setupId: setup-opening-range-breakout
@@ -168,7 +168,7 @@ Trading/
       NQ/
         2026/
           08/
-            2026-08-13-NQ-opening-range-plan.md
+            2026-08-13-NQ.md
     NQ/
       2026/
         08/
@@ -254,7 +254,7 @@ setupLinks:
 
 # Live daily note
 planLinks:
-  - "[[Trading/Live/_plans/NQ/2026/08/2026-08-13-NQ-opening-range-plan]]"
+  - "[[Trading/Live/_plans/NQ/2026/08/2026-08-13-NQ]]"
 ```
 
 The plugin also adds a tag matching each generated note type:
@@ -275,7 +275,9 @@ tag:#trader-journal-live-symbol-day
 tag:#trader-journal-symbol-day
 ```
 
-Existing plugin notes missing their type tag are updated after the workspace is ready. User-created tags are preserved.
+Generated notes use the `traderJournalNoteType` property to avoid conflicts with a vault-wide `type` property.
+Existing plugin notes using the legacy `type` property, or missing their note-type tag, are migrated after the
+workspace is ready. User-created tags are preserved.
 
 ## Settings
 

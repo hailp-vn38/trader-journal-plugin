@@ -34,22 +34,27 @@ export function PlanOverview({ language, plugin, snapshot, symbol }: PlanOvervie
 				<PlanMetric label={tr('dashboard.openPlans')} value={metrics.openCount} tone="accent" />
 				<PlanMetric label={tr('dashboard.closedPlans')} value={metrics.closedCount} />
 				<PlanMetric label={tr('dashboard.cancelledPlans')} value={metrics.cancelledCount} />
-				<PlanMetric
-					label={tr('dashboard.planExecution')}
-					value={`${metrics.executionRate.toFixed(1)}%`}
-					title={tr('dashboard.planExecutionDescription')}
-				/>
 			</div>
-			<p className="trader-journal-dashboard__metric-note">
-				{tr('dashboard.planExecutionDescription')}
-			</p>
 
-			{metrics.openWithoutTradesCount > 0 ? (
-				<div className="trader-journal-dashboard__plan-alert">
-					<strong>{metrics.openWithoutTradesCount}</strong>
-					<span>{tr('dashboard.plansNeedTrade')}</span>
+			<div className="trader-journal-dashboard__plan-execution">
+				<div className="trader-journal-dashboard__plan-execution-header">
+					<div>
+						<strong>{tr('dashboard.planExecution')}</strong>
+						<span>{tr('dashboard.planExecutionDescription')}</span>
+					</div>
+					<strong>{metrics.executionRate.toFixed(1)}%</strong>
 				</div>
-			) : null}
+				<div
+					className="trader-journal-dashboard__plan-execution-track"
+					role="progressbar"
+					aria-label={tr('dashboard.planExecution')}
+					aria-valuemin={0}
+					aria-valuemax={100}
+					aria-valuenow={metrics.executionRate}
+				>
+					<span style={{ width: `${Math.min(100, Math.max(0, metrics.executionRate))}%` }} />
+				</div>
+			</div>
 
 			<div className="trader-journal-dashboard__subheading">
 				<h4>{tr('dashboard.activePlans')}</h4>
@@ -73,15 +78,13 @@ function PlanMetric({
 	label,
 	value,
 	tone = 'neutral',
-	title,
 }: {
 	label: string;
-	value: number | string;
+	value: number;
 	tone?: 'accent' | 'neutral';
-	title?: string;
 }) {
 	return (
-		<div className={`trader-journal-dashboard-plan-metric trader-journal-dashboard-plan-metric--${tone}`} title={title}>
+		<div className={`trader-journal-dashboard-plan-metric trader-journal-dashboard-plan-metric--${tone}`}>
 			<strong>{value}</strong>
 			<span>{label}</span>
 		</div>

@@ -107,7 +107,6 @@ export function Dashboard({ plugin }: DashboardProps) {
 
 			<section className="trader-journal-dashboard__attention" aria-label={tr('dashboard.attention')}>
 				<AttentionCard label={tr('dashboard.openLiveTrades')} value={openLiveTradeCount} />
-				<AttentionCard label={tr('dashboard.openPlans')} value={planMetrics.openCount} />
 				<AttentionCard label={tr('dashboard.plansNeedTrade')} value={planMetrics.openWithoutTradesCount} />
 			</section>
 
@@ -149,7 +148,14 @@ export function Dashboard({ plugin }: DashboardProps) {
 				</div>
 			</section>
 
-			<div className="trader-journal-dashboard__content-grid">
+			<PlanOverview
+				language={language}
+				plugin={plugin}
+				snapshot={journalData.plans}
+				symbol={symbol}
+			/>
+
+			<div className="trader-journal-dashboard__secondary-grid">
 				<section className="trader-journal-dashboard__panel">
 					<h3>{tr('dashboard.recentTrades')}</h3>
 					{trades.length ? (
@@ -161,15 +167,7 @@ export function Dashboard({ plugin }: DashboardProps) {
 					) : <p className="trader-journal-dashboard__empty">{tr('dashboard.emptyTrades')}</p>}
 				</section>
 
-				<div className="trader-journal-dashboard__right-column">
-					<SetupOverview language={language} plugin={plugin} />
-					<PlanOverview
-						language={language}
-						plugin={plugin}
-						snapshot={journalData.plans}
-						symbol={symbol}
-					/>
-				</div>
+				<SetupOverview language={language} plugin={plugin} />
 			</div>
 		</div>
 	);

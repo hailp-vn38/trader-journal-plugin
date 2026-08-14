@@ -17,6 +17,11 @@ import { getTradePlanById } from '../plans/storage';
 import { createWikiLink } from '../utils/wikiLinks';
 import { mergeFrontmatterTags } from '../utils/frontmatterTags';
 import { classifyTraderJournalPath } from '../journal/pathScope';
+import {
+	getTraderJournalNoteType,
+	setTraderJournalNoteType,
+	TRADER_JOURNAL_NOTE_TYPE_KEY,
+} from '../utils/noteType';
 
 const BACKTEST_NOTE_TYPE = 'trader-journal-symbol-day';
 const LIVE_NOTE_TYPE = 'trader-journal-live-symbol-day';
@@ -207,6 +212,7 @@ export async function rebuildDailyNoteStats(
 			for (const [key, value] of Object.entries(metadata)) {
 				targetMetadata[key] = value;
 			}
+			setTraderJournalNoteType(targetMetadata, getNoteType(metadata.journalType as TradeJournalType));
 		});
 		updated = true;
 	}
@@ -260,7 +266,7 @@ function renderInitialNote(
 ): string {
 	const stats = getEmptyStats();
 	const frontmatter = stringifyYaml({
-		type: getNoteType(journalType),
+		[TRADER_JOURNAL_NOTE_TYPE_KEY]: getNoteType(journalType),
 		tags: [getNoteType(journalType)],
 		schemaVersion: SCHEMA_VERSION,
 		journalType,
@@ -349,7 +355,7 @@ function buildRebuiltNote(
 	const extractedTrades = extractTrades(body);
 	const { trades } = extractedTrades;
 	const isJournalNote =
-		isKnownNoteType(stringifyValue(parsedFrontmatter.type)) ||
+		isKnownNoteType(getTraderJournalNoteType(parsedFrontmatter)) ||
 		hasTradeBlocks(body) ||
 		Boolean(fallbackIdentity?.symbol || fallbackIdentity?.journalDate || fallbackIdentity?.journalType);
 
@@ -383,7 +389,7 @@ function createDailyMetadata(
 	graphLinks: JournalGraphLinks,
 ): Record<string, unknown> {
 	const metadata: Record<string, unknown> = {
-		type: getNoteType(identity.journalType),
+		[TRADER_JOURNAL_NOTE_TYPE_KEY]: getNoteType(identity.journalType),
 		tags: mergeFrontmatterTags(frontmatter.tags, [getNoteType(identity.journalType)]),
 		schemaVersion: SCHEMA_VERSION,
 		journalType: identity.journalType,
@@ -477,7 +483,7 @@ function getJournalType(
 	firstTrade: TradeEntry | undefined,
 	fallbackIdentity: Partial<JournalIdentity> | undefined,
 ): TradeJournalType {
-	const noteType = stringifyValue(frontmatter.type);
+	const noteType = getTraderJournalNoteType(frontmatter);
 	if (noteType === LIVE_NOTE_TYPE) {
 		return 'live';
 	}

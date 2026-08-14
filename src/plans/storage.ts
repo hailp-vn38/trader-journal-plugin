@@ -9,6 +9,7 @@ import { createWikiLink } from '../utils/wikiLinks';
 import { mergeFrontmatterTags } from '../utils/frontmatterTags';
 import { classifyTraderJournalPath } from '../journal/pathScope';
 import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
+import { setTraderJournalNoteType, TRADER_JOURNAL_NOTE_TYPE_KEY } from '../utils/noteType';
 
 const PLAN_NOTE_TYPE = 'trader-journal-live-plan';
 const SCHEMA_VERSION = 1;
@@ -402,13 +403,14 @@ async function updatePlanFrontmatter(
 		for (const [key, value] of Object.entries(metadata)) {
 			targetMetadata[key] = value;
 		}
+		setTraderJournalNoteType(targetMetadata, PLAN_NOTE_TYPE);
 		targetMetadata.tags = tags;
 	});
 }
 
 function createPlanMetadata(plan: TradePlanEntry, setupLink: string): Record<string, unknown> {
 	return {
-		type: PLAN_NOTE_TYPE,
+		[TRADER_JOURNAL_NOTE_TYPE_KEY]: PLAN_NOTE_TYPE,
 		tags: [PLAN_NOTE_TYPE],
 		schemaVersion: SCHEMA_VERSION,
 		journalType: 'live',
@@ -440,13 +442,7 @@ function getUniquePlanFilePath(plugin: TraderJournalPlugin, plan: TradePlanEntry
 	const symbol = normalizeSymbol(stringifyValue(plan.symbol)) || 'UNKNOWN';
 	const startDate = stringifyValue(plan.start_date);
 	const dateParts = parseDateParts(startDate);
-	const baseName = [
-		startDate,
-		sanitizePathSegment(symbol),
-		slugifyTitle(stringifyValue(plan.title)),
-	]
-		.filter(Boolean)
-		.join('-');
+	const baseName = `${startDate}-${sanitizePathSegment(symbol)}`;
 	let candidatePath = normalizePath(
 		`${root}/${sanitizePathSegment(symbol)}/${dateParts.year}/${dateParts.month}/${baseName}.md`,
 	);
@@ -536,15 +532,6 @@ function isDateKey(value: string): boolean {
 function sanitizePathSegment(value: string): string {
 	const sanitized = value.trim().replace(/[\\/#^[\]|?*:]/g, '-').replace(/\s+/g, '-');
 	return sanitized || 'UNKNOWN';
-}
-
-function slugifyTitle(value: string): string {
-	return value
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-+|-+$/g, '')
-		.slice(0, 48);
 }
 
 function getCurrentLocalIsoString(): string {

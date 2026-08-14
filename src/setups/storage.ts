@@ -6,6 +6,11 @@ import type { NewTradeSetup, TradeSetupDefinition, TradeSetupStatus } from './ty
 import { mergeFrontmatterTags } from '../utils/frontmatterTags';
 import { normalizeSymbol } from '../settings';
 import { INDEX_READ_CONCURRENCY, mapWithConcurrency } from '../utils/async';
+import {
+	getTraderJournalNoteType,
+	setTraderJournalNoteType,
+	TRADER_JOURNAL_NOTE_TYPE_KEY,
+} from '../utils/noteType';
 
 const SETUP_NOTE_TYPE = 'trader-journal-setup';
 const DEFAULT_SETUP_FOLDER = 'Trading/_setups';
@@ -101,7 +106,7 @@ export async function updateTradeSetup(
 
 	await plugin.app.fileManager.processFrontMatter(abstractFile, (frontmatter) => {
 		const metadata = frontmatter as Record<string, unknown>;
-		metadata.type = SETUP_NOTE_TYPE;
+		setTraderJournalNoteType(metadata, SETUP_NOTE_TYPE);
 		metadata.tags = mergeFrontmatterTags(metadata.tags, [SETUP_NOTE_TYPE]);
 		metadata.setupId = initialSetup.id;
 		metadata.name = updatedSetup.name;
@@ -128,7 +133,7 @@ export async function readTradeSetupFile(
 		const content = await plugin.app.vault.cachedRead(file);
 		const { frontmatter, body } = splitFrontmatter(content);
 		const metadata = parseFrontmatter(frontmatter);
-		if (stringifyValue(metadata.type) !== SETUP_NOTE_TYPE) {
+		if (getTraderJournalNoteType(metadata) !== SETUP_NOTE_TYPE) {
 			return null;
 		}
 
@@ -170,7 +175,7 @@ function extractSetupSection(body: string, heading: typeof SETUP_SECTIONS[number
 
 function renderSetupNote(setup: TradeSetupDefinition): string {
 	const frontmatter = stringifyYaml({
-		type: SETUP_NOTE_TYPE,
+		[TRADER_JOURNAL_NOTE_TYPE_KEY]: SETUP_NOTE_TYPE,
 		tags: mergeFrontmatterTags(undefined, [SETUP_NOTE_TYPE]),
 		setupId: setup.id,
 		name: setup.name,

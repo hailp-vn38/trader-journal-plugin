@@ -2,8 +2,13 @@ import { TFile, TFolder } from 'obsidian';
 import type TraderJournalPlugin from '../main';
 import { classifyTraderJournalPath, normalizeScopePath } from '../journal/pathScope';
 import { hasFrontmatterTag, mergeFrontmatterTags } from '../utils/frontmatterTags';
+import {
+	getTraderJournalNoteType,
+	setTraderJournalNoteType,
+	TRADER_JOURNAL_NOTE_TYPE_KEY,
+} from '../utils/noteType';
 
-const GRAPH_TAG_MIGRATION_VERSION = 1;
+const GRAPH_TAG_MIGRATION_VERSION = 2;
 const MIGRATION_BATCH_SIZE = 50;
 const INCREMENTAL_SYNC_DEBOUNCE_MS = 200;
 
@@ -132,15 +137,21 @@ function isGraphScopeFile(plugin: TraderJournalPlugin, file: TFile): boolean {
 
 async function ensureGraphTypeTag(plugin: TraderJournalPlugin, file: TFile): Promise<boolean> {
 	const frontmatter = plugin.app.metadataCache.getFileCache(file)?.frontmatter;
-	const noteType = typeof frontmatter?.type === 'string' ? frontmatter.type.trim() : '';
-	if (!GRAPH_NOTE_TYPES.has(noteType) || hasFrontmatterTag(frontmatter?.tags, noteType)) {
+	const metadata = (frontmatter ?? {}) as Record<string, unknown>;
+	const noteType = getTraderJournalNoteType(metadata);
+	if (!GRAPH_NOTE_TYPES.has(noteType)) {
+		return true;
+	}
+	const usesCurrentNoteTypeKey = metadata[TRADER_JOURNAL_NOTE_TYPE_KEY] === noteType && !('type' in metadata);
+	if (usesCurrentNoteTypeKey && hasFrontmatterTag(metadata.tags, noteType)) {
 		return true;
 	}
 
 	try {
 		await plugin.app.fileManager.processFrontMatter(file, (currentFrontmatter) => {
-			const metadata = currentFrontmatter as Record<string, unknown>;
-			metadata.tags = mergeFrontmatterTags(metadata.tags, [noteType]);
+			const currentMetadata = currentFrontmatter as Record<string, unknown>;
+			setTraderJournalNoteType(currentMetadata, noteType);
+			currentMetadata.tags = mergeFrontmatterTags(currentMetadata.tags, [noteType]);
 		});
 		return true;
 	} catch (error) {
