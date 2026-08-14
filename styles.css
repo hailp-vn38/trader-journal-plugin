@@ -10,7 +10,6 @@
 	width: min(960px, calc(100vw - 32px));
 	max-width: calc(100vw - 32px);
 	max-height: calc(100vh - 48px);
-	max-height: calc(100dvh - 48px);
 	overflow: hidden;
 }
 
@@ -24,8 +23,17 @@
 	gap: 0;
 	width: 100%;
 	max-height: calc(100vh - 96px);
-	max-height: calc(100dvh - 96px);
 	min-width: 0;
+}
+
+@supports (height: 100dvh) {
+	.trader-journal-modal-shell {
+		max-height: calc(100dvh - 48px);
+	}
+
+	.trader-journal-form {
+		max-height: calc(100dvh - 96px);
+	}
 }
 
 .trader-journal-form__body {

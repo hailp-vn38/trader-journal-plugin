@@ -1,6 +1,6 @@
 {
 	"name": "trader-journal-plugin",
-	"version": "1.4.0",
+	"version": "1.4.1",
 	"description": "Trading journal for Obsidian with backtest and live trade workflows.",
 	"main": "main.js",
 	"type": "module",
