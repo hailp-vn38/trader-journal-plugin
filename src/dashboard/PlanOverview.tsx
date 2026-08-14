@@ -27,6 +27,13 @@ export function PlanOverview({ language, plugin, snapshot, symbol }: PlanOvervie
 					<h3>{tr('dashboard.planOverview')}</h3>
 					<p>{tr('dashboard.planOverviewSubtitle')}</p>
 				</div>
+				<DashboardIconButton
+					icon="plus"
+					label={tr('command.addTradePlan')}
+					primary
+					size="compact"
+					onClick={() => new TradePlanModal(plugin.app, plugin).open()}
+				/>
 			</div>
 
 			<div className="trader-journal-dashboard__plan-metrics">

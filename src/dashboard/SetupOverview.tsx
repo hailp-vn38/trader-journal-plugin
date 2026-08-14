@@ -92,6 +92,13 @@ export function SetupOverview({ language, plugin }: SetupOverviewProps) {
 					<h3>{tr('dashboard.setups')}</h3>
 					<p>{tr('dashboard.setupOverviewSubtitle')}</p>
 				</div>
+				<DashboardIconButton
+					icon="plus"
+					label={tr('command.addTradeSetup')}
+					primary
+					size="compact"
+					onClick={() => new TradeSetupModal(plugin.app, plugin).open()}
+				/>
 			</div>
 
 			<div className="trader-journal-dashboard__setup-metrics">

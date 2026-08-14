@@ -1589,6 +1589,14 @@ button.trader-journal-trade-detail__link:focus-visible {
 	box-sizing: border-box;
 }
 
+.trader-journal-dashboard button:not(:disabled) {
+	cursor: pointer;
+}
+
+.trader-journal-dashboard button:disabled {
+	cursor: not-allowed;
+}
+
 .trader-journal-dashboard__header {
 	display: flex;
 	flex-wrap: wrap;
@@ -1779,6 +1787,12 @@ button.trader-journal-dashboard-icon-button--compact {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 	font-weight: 500;
+}
+
+.trader-journal-dashboard__recent-trades {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
 }
 
 .trader-journal-dashboard__list {

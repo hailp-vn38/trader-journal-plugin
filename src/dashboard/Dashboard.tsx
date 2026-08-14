@@ -8,6 +8,7 @@ import { LANGUAGE_CHANGE_EVENT, type TraderJournalLanguage } from '../settings';
 import type { JournalCalendarTrade } from '../trades/journalIndex';
 import type { TradeJournalType } from '../trades/types';
 import { TradePlanModal } from '../ui/TradePlanModal';
+import { TradeSetupModal } from '../ui/TradeSetupModal';
 import { TraderJournalModal } from '../ui/TraderJournalModal';
 import { openTraderJournalCalendar } from '../ui/TradeCalendarView';
 import {
@@ -96,6 +97,11 @@ export function Dashboard({ plugin }: DashboardProps) {
 						onClick={() => new TradePlanModal(plugin.app, plugin).open()}
 					/>
 					<DashboardIconButton
+						icon="list-plus"
+						label={tr('command.addTradeSetup')}
+						onClick={() => new TradeSetupModal(plugin.app, plugin).open()}
+					/>
+					<DashboardIconButton
 						icon="calendar-clock"
 						label={tr('dashboard.openCalendar')}
 						onClick={() => void openTraderJournalCalendar(plugin)}
@@ -156,8 +162,17 @@ export function Dashboard({ plugin }: DashboardProps) {
 			/>
 
 			<div className="trader-journal-dashboard__secondary-grid">
-				<section className="trader-journal-dashboard__panel">
-					<h3>{tr('dashboard.recentTrades')}</h3>
+				<section className="trader-journal-dashboard__panel trader-journal-dashboard__recent-trades">
+					<div className="trader-journal-dashboard__section-header">
+						<h3>{tr('dashboard.recentTrades')}</h3>
+						<DashboardIconButton
+							icon="plus"
+							label={tr(journalType === 'live' ? 'command.addLiveTrade' : 'command.addBacktestTrade')}
+							primary
+							size="compact"
+							onClick={() => new TraderJournalModal(plugin.app, plugin, journalType).open()}
+						/>
+					</div>
 					{trades.length ? (
 						<div className="trader-journal-dashboard__list">
 							{trades.slice(0, 10).map((trade) => (
