@@ -1,10 +1,11 @@
 import type { Events, WorkspaceLeaf } from 'obsidian';
-import { ItemView, MarkdownView, Notice, setIcon } from 'obsidian';
+import { ItemView, Notice, setIcon } from 'obsidian';
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import type { Root } from 'react-dom/client';
 import type TraderJournalPlugin from '../main';
+import { openJournalTrade } from '../trades/openTrade';
 import { TradePlanModal } from './TradePlanModal';
 import { TraderJournalModal } from './TraderJournalModal';
 import { TradeReviewModal } from './TradeReviewModal';
@@ -998,8 +999,7 @@ function TradeCalendarCard({
 	const result = formatResult(trade.trade.result, language);
 	const openTradeFile = async () => {
 		try {
-			await plugin.app.workspace.openLinkText(trade.filePath, '', false);
-			scrollActiveMarkdownViewToTrade(plugin, trade);
+			await openJournalTrade(plugin, trade);
 		} catch (error) {
 			console.error('Trader Journal failed to open trade note', error);
 			new Notice(tr('calendar.openTradeNoteError'));
@@ -1097,23 +1097,6 @@ function TradeCalendarCard({
 			) : null}
 		</div>
 	);
-}
-
-function scrollActiveMarkdownViewToTrade(plugin: TraderJournalPlugin, trade: JournalCalendarTrade): void {
-	if (trade.headingLine === null) {
-		return;
-	}
-
-	window.setTimeout(() => {
-		const markdownView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-		if (!markdownView || markdownView.file?.path !== trade.filePath) {
-			return;
-		}
-
-		const position = { line: trade.headingLine ?? 0, ch: 0 };
-		markdownView.editor.setCursor(position);
-		markdownView.editor.scrollIntoView({ from: position, to: position }, true);
-	}, 50);
 }
 
 function getCalendarDates(monthKey: string): CalendarDateCell[] {

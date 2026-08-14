@@ -15,6 +15,7 @@ import { EconomicCalendarService } from './economicCalendar/api';
 import type { EconomicCalendarCache } from './economicCalendar/types';
 import { JournalDataService } from './journal/JournalDataService';
 import { registerTraderJournalDashboardView } from './dashboard/DashboardView';
+import { registerTradeDrilldownView } from './dashboard/drilldown/TradeDrilldownView';
 import { syncGraphTypeTags } from './graph/tagSync';
 import { ReferenceDataService } from './journal/ReferenceDataService';
 
@@ -48,6 +49,7 @@ export default class TraderJournalPlugin extends Plugin {
 
 		registerTraderJournalCalendarView(this);
 		registerTraderJournalDashboardView(this);
+		registerTradeDrilldownView(this);
 		registerCommands(this);
 		this.app.workspace.onLayoutReady(() => registerAutoStatsRebuild(this));
 		this.app.workspace.onLayoutReady(() => {

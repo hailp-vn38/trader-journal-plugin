@@ -2150,14 +2150,32 @@ button.trader-journal-dashboard-icon-button--compact {
 	gap: 8px;
 }
 
-.trader-journal-dashboard-review-metric {
+button.trader-journal-dashboard-review-metric {
+	appearance: none;
 	display: flex;
 	flex-direction: column;
+	align-items: flex-start;
 	gap: 3px;
+	width: 100%;
+	height: auto;
 	min-width: 0;
+	border: 1px solid transparent;
 	border-radius: 8px;
 	background: var(--background-primary);
+	box-shadow: none;
+	color: var(--text-normal);
+	cursor: pointer;
+	font: inherit;
 	padding: 11px 12px;
+	text-align: left;
+}
+
+button.trader-journal-dashboard-review-metric:hover,
+button.trader-journal-dashboard-review-metric:focus-visible {
+	border-color: transparent;
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+	outline: none;
 }
 
 .trader-journal-dashboard-review-metric strong {
@@ -2206,10 +2224,31 @@ button.trader-journal-dashboard-icon-button--compact {
 	gap: 10px;
 }
 
-.trader-journal-dashboard-mistake {
+button.trader-journal-dashboard-mistake {
+	appearance: none;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
 	gap: 4px 10px;
+	width: 100%;
+	height: auto;
+	margin: 0;
+	border: 1px solid transparent;
+	border-radius: 7px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	cursor: pointer;
+	font: inherit;
+	padding: 5px;
+	text-align: left;
+}
+
+button.trader-journal-dashboard-mistake:hover,
+button.trader-journal-dashboard-mistake:focus-visible {
+	border-color: transparent;
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+	outline: none;
 }
 
 .trader-journal-dashboard-mistake > div:first-child {
@@ -2275,6 +2314,28 @@ button.trader-journal-dashboard-icon-button--compact {
 	border-top: 1px solid var(--background-modifier-border-hover);
 }
 
+button.trader-journal-dashboard-adherence__row {
+	appearance: none;
+	height: auto;
+	margin: 0;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	cursor: pointer;
+	font: inherit;
+	text-align: left;
+}
+
+button.trader-journal-dashboard-adherence__row:hover,
+button.trader-journal-dashboard-adherence__row:focus-visible {
+	border-color: transparent;
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+	outline: none;
+}
+
 .trader-journal-dashboard-adherence__header span:not(:first-child),
 .trader-journal-dashboard-adherence__row span {
 	text-align: right;
@@ -2307,6 +2368,198 @@ button.trader-journal-dashboard-icon-button--compact {
 	margin-top: 4px;
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
+}
+
+.trader-journal-drilldown-view {
+	container-name: trader-journal-drilldown-view;
+	container-type: inline-size;
+	overflow: auto;
+	padding: 24px;
+}
+
+.trader-journal-drilldown {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	width: min(980px, 100%);
+	min-width: 0;
+	margin: 0 auto;
+}
+
+.trader-journal-drilldown,
+.trader-journal-drilldown * {
+	box-sizing: border-box;
+}
+
+.trader-journal-drilldown__header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.trader-journal-drilldown__header h2,
+.trader-journal-drilldown__header p,
+.trader-journal-drilldown__filtered-count,
+.trader-journal-drilldown__empty {
+	margin: 0;
+}
+
+.trader-journal-drilldown__header p,
+.trader-journal-drilldown__filtered-count,
+.trader-journal-drilldown__empty {
+	color: var(--text-muted);
+}
+
+.trader-journal-drilldown__header p {
+	margin-top: 5px;
+}
+
+.trader-journal-drilldown__context {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
+.trader-journal-drilldown__context span {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-secondary);
+	padding: 4px 9px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trader-journal-drilldown__toolbar {
+	display: grid;
+	grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px);
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-secondary);
+}
+
+.trader-journal-drilldown__toolbar label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-drilldown__toolbar input,
+.trader-journal-drilldown__toolbar select {
+	width: 100%;
+}
+
+.trader-journal-drilldown__filtered-count {
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-drilldown__list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.trader-journal-drilldown-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	align-items: center;
+	gap: 14px;
+	min-width: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 9px;
+	background: var(--background-secondary);
+	padding: 12px;
+	cursor: pointer;
+}
+
+.trader-journal-drilldown-row:hover,
+.trader-journal-drilldown-row:focus-visible {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+	outline: none;
+}
+
+.trader-journal-drilldown-row__main {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 0;
+}
+
+.trader-journal-drilldown-row__title,
+.trader-journal-drilldown-row__details,
+.trader-journal-drilldown-row__metrics,
+.trader-journal-drilldown-row__actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.trader-journal-drilldown-row__title span,
+.trader-journal-drilldown-row__details {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trader-journal-drilldown-row__details span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trader-journal-drilldown-row__metrics {
+	justify-content: flex-end;
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+}
+
+.trader-journal-drilldown-row__metrics .is-win,
+.trader-journal-drilldown-row__metrics .is-reviewed {
+	color: var(--text-success);
+}
+
+.trader-journal-drilldown-row__metrics .is-loss {
+	color: var(--text-error);
+}
+
+.trader-journal-drilldown-row__metrics .is-unreviewed {
+	color: var(--color-orange);
+}
+
+.trader-journal-drilldown-row__actions {
+	justify-content: flex-end;
+}
+
+@container trader-journal-drilldown-view (max-width: 680px) {
+	.trader-journal-drilldown-view {
+		padding: 12px;
+	}
+
+	.trader-journal-drilldown__header {
+		flex-direction: column;
+	}
+
+	.trader-journal-drilldown__context {
+		justify-content: flex-start;
+	}
+
+	.trader-journal-drilldown__toolbar,
+	.trader-journal-drilldown-row {
+		grid-template-columns: 1fr;
+	}
+
+	.trader-journal-drilldown-row__metrics,
+	.trader-journal-drilldown-row__actions {
+		justify-content: flex-start;
+	}
 }
 
 .trader-journal-dashboard__performance .trader-journal-dashboard__filters {

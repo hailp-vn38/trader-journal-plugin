@@ -10,6 +10,11 @@ import {
 import type { JournalCalendarSnapshot, JournalCalendarTrade } from '../src/trades/journalIndex';
 import { isTradeReviewed, normalizeTradeReview } from '../src/trades/review';
 import type { TradeEntry, TradeReview } from '../src/trades/types';
+import {
+	countTradeDrilldownFiles,
+	filterTradeDrilldownTrades,
+	getTradeDrilldownTrades,
+} from '../src/dashboard/drilldown/tradeDrilldownQuery';
 
 void test('normalizes valid review fields and drops unsupported mistake tags', () => {
 	const review = normalizeTradeReview({
@@ -144,6 +149,57 @@ void test('counts only closed unreviewed live trades for the selected symbol', (
 	assert.equal(getUnreviewedClosedLiveTradeCount(snapshot, 'NQ'), 1);
 });
 
+void test('drills down by review status, mistake, and plan adherence within dashboard filters', () => {
+	const followedFomo = createIndexedTrade(
+		'followed-fomo',
+		'2026-08-14',
+		'win',
+		2,
+		createReview('followed', ['fomo']),
+		'NQ',
+		'Journal/day-a.md',
+	);
+	const ignoredPlan = createIndexedTrade(
+		'ignored-plan',
+		'2026-08-13',
+		'loss',
+		1,
+		createReview('not_followed', ['ignored_plan']),
+		'NQ',
+		'Journal/day-a.md',
+	);
+	const unreviewed = createIndexedTrade(
+		'unreviewed',
+		'2026-08-12',
+		'loss',
+		1.5,
+		undefined,
+		'ES',
+		'Journal/day-b.md',
+	);
+	const snapshot = createSnapshot([followedFomo, ignoredPlan, unreviewed]);
+	const filters = { journalType: 'live' as const, period: 'all' as const, symbol: 'NQ' };
+
+	assert.deepEqual(getTradeDrilldownTrades(snapshot, {
+		criterion: { kind: 'mistake', value: 'fomo' },
+		filters,
+	}), [followedFomo]);
+	assert.deepEqual(getTradeDrilldownTrades(snapshot, {
+		criterion: { kind: 'plan-adherence', value: 'not_followed' },
+		filters,
+	}), [ignoredPlan]);
+	assert.deepEqual(getTradeDrilldownTrades(snapshot, {
+		criterion: { kind: 'review-status', value: 'unreviewed' },
+		filters: { ...filters, symbol: '' },
+	}), [unreviewed]);
+	assert.equal(countTradeDrilldownFiles([followedFomo, ignoredPlan, unreviewed]), 2);
+	assert.deepEqual(filterTradeDrilldownTrades(
+		[followedFomo, ignoredPlan, unreviewed],
+		'NQ',
+		'rr-low',
+	), [ignoredPlan, followedFomo]);
+});
+
 function createReview(
 	planAdherence: TradeReview['plan_adherence'],
 	mistakeTags: NonNullable<TradeReview['mistake_tags']>,
@@ -193,5 +249,28 @@ function createSnapshot(trades: JournalCalendarTrade[]): JournalCalendarSnapshot
 		},
 		dayDates: ['2026-08-14'],
 		tradeCount: trades.length,
+	};
+}
+
+function createIndexedTrade(
+	id: string,
+	journalDate: string,
+	resultKey: 'win' | 'loss',
+	rr: number,
+	review: TradeReview | undefined,
+	symbol: string,
+	filePath: string,
+): JournalCalendarTrade {
+	return {
+		...createTrade(resultKey, rr, review, symbol),
+		id,
+		journalDate,
+		sortTime: new Date(`${journalDate}T12:00:00`).getTime(),
+		filePath,
+		setup: id,
+		timeframe: '5m',
+		side: 'Long',
+		result: resultKey,
+		rr: `${rr}R`,
 	};
 }

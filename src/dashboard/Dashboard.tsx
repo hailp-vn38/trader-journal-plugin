@@ -29,6 +29,7 @@ import { DashboardIconButton } from './DashboardIconButton';
 import { SetupOverview } from './SetupOverview';
 import { ReviewInsights } from './ReviewInsights';
 import { RecentTradeFilters } from './RecentTradeFilters';
+import { openJournalTrade } from '../trades/openTrade';
 
 interface DashboardProps {
 	plugin: TraderJournalPlugin;
@@ -189,7 +190,14 @@ export function Dashboard({ plugin }: DashboardProps) {
 				</div>
 			</section>
 
-			{journalType === 'live' ? <ReviewInsights language={language} trades={trades} /> : null}
+			{journalType === 'live' ? (
+				<ReviewInsights
+					filters={{ journalType, period, symbol }}
+					language={language}
+					plugin={plugin}
+					trades={trades}
+				/>
+			) : null}
 
 			<PlanOverview
 				language={language}
@@ -252,7 +260,7 @@ function RecentTradeRow({ trade, locale, plugin }: { trade: JournalCalendarTrade
 	const tr = getTranslator(plugin.settings.language);
 	const openTrade = async () => {
 		try {
-			await plugin.app.workspace.openLinkText(trade.filePath, '', false);
+			await openJournalTrade(plugin, trade);
 		} catch (error) {
 			console.error('Trader Journal failed to open trade note from dashboard', error);
 			new Notice(getTranslator(plugin.settings.language)('calendar.openTradeNoteError'));
