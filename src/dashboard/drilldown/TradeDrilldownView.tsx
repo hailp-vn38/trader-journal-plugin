@@ -101,14 +101,26 @@ function readQuery(state: unknown): TradeDrilldownQuery | null {
 	if (!isRecord(criterion) || !isCriterion(criterion) || !isRecord(filters)) {
 		return null;
 	}
-	const periods = ['7d', '30d', 'month', 'all'] as const;
+	const periods = ['today', 'yesterday', '7d', '30d', 'month', 'custom', 'all'] as const;
 	if (!periods.includes(filters.period as typeof periods[number]) || typeof filters.symbol !== 'string') {
 		return null;
 	}
+	const dateFrom = readDate(filters.dateFrom);
+	const dateTo = readDate(filters.dateTo);
 	return {
 		criterion,
-		filters: { journalType: 'live', period: filters.period as typeof periods[number], symbol: filters.symbol },
+		filters: {
+			journalType: 'live',
+			period: filters.period as typeof periods[number],
+			symbol: filters.symbol,
+			...(dateFrom ? { dateFrom } : {}),
+			...(dateTo ? { dateTo } : {}),
+		},
 	};
+}
+
+function readDate(value: unknown): string | null {
+	return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
 function isCriterion(value: Record<string, unknown>): value is TradeDrilldownCriterion {

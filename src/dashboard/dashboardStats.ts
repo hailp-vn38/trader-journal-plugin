@@ -8,12 +8,14 @@ import {
 	normalizeTradeReview,
 } from '../trades/review';
 
-export type DashboardPeriod = '7d' | '30d' | 'month' | 'all';
+export type DashboardPeriod = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom' | 'all';
 
 export interface DashboardFilters {
 	journalType: TradeJournalType;
 	period: DashboardPeriod;
 	symbol: string;
+	dateFrom?: string;
+	dateTo?: string;
 }
 
 export type RecentTradeOutcomeFilter = 'all' | 'open' | 'win' | 'loss' | 'breakeven';
@@ -92,11 +94,12 @@ export function getDashboardTrades(
 	filters: DashboardFilters,
 	today = new Date(),
 ): JournalCalendarTrade[] {
-	const startDate = getPeriodStartDate(filters.period, today);
+	const { startDate, endDate } = getPeriodDateRange(filters, today);
 	return collectTrades(snapshot)
 		.filter((trade) => trade.journalType === filters.journalType)
 		.filter((trade) => !filters.symbol || trade.symbol === filters.symbol)
 		.filter((trade) => !startDate || trade.journalDate >= startDate)
+		.filter((trade) => !endDate || trade.journalDate <= endDate)
 		.sort((first, second) => {
 			if (first.journalDate !== second.journalDate) {
 				return second.journalDate.localeCompare(first.journalDate);
@@ -340,18 +343,41 @@ function parseRr(value: unknown): number {
 	return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getPeriodStartDate(period: DashboardPeriod, today: Date): string | null {
-	if (period === 'all') {
-		return null;
+function getPeriodDateRange(
+	filters: DashboardFilters,
+	today: Date,
+): { startDate: string | null; endDate: string | null } {
+	if (filters.period === 'all') {
+		return { startDate: null, endDate: null };
+	}
+	if (filters.period === 'custom') {
+		return {
+			startDate: normalizeDateFilter(filters.dateFrom),
+			endDate: normalizeDateFilter(filters.dateTo),
+		};
 	}
 
 	const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-	if (period === 'month') {
+	if (filters.period === 'today') {
+		const date = formatDateKey(start);
+		return { startDate: date, endDate: date };
+	}
+	if (filters.period === 'yesterday') {
+		start.setDate(start.getDate() - 1);
+		const date = formatDateKey(start);
+		return { startDate: date, endDate: date };
+	}
+	if (filters.period === 'month') {
 		start.setDate(1);
 	} else {
-		start.setDate(start.getDate() - (period === '7d' ? 6 : 29));
+		start.setDate(start.getDate() - (filters.period === '7d' ? 6 : 29));
 	}
-	return formatDateKey(start);
+	return { startDate: formatDateKey(start), endDate: null };
+}
+
+function normalizeDateFilter(value: string | undefined): string | null {
+	const normalized = value?.trim() ?? '';
+	return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null;
 }
 
 function formatDateKey(date: Date): string {

@@ -1845,6 +1845,7 @@ button.trader-journal-dashboard-icon-button--compact {
 	font-size: var(--font-ui-small);
 }
 
+.trader-journal-dashboard__filters input,
 .trader-journal-dashboard__filters select {
 	width: 100%;
 }

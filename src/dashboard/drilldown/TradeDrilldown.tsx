@@ -61,6 +61,12 @@ export function TradeDrilldown({ plugin, query }: TradeDrilldownProps) {
 				</div>
 				<div className="trader-journal-drilldown__context" aria-label={tr('drilldown.appliedFilters')}>
 					<span>{tr(getPeriodKey(query.filters.period))}</span>
+					{query.filters.period === 'custom' && query.filters.dateFrom ? (
+						<span>{tr('dashboard.dateFrom')}: {formatDate(query.filters.dateFrom, locale)}</span>
+					) : null}
+					{query.filters.period === 'custom' && query.filters.dateTo ? (
+						<span>{tr('dashboard.dateTo')}: {formatDate(query.filters.dateTo, locale)}</span>
+					) : null}
 					<span>{query.filters.symbol || tr('dashboard.allSymbols')}</span>
 				</div>
 			</header>
@@ -202,9 +208,12 @@ function getCriterionLabel(query: TradeDrilldownQuery, language: TraderJournalLa
 
 function getPeriodKey(period: TradeDrilldownQuery['filters']['period']): I18nKey {
 	return ({
+		today: 'dashboard.today',
+		yesterday: 'dashboard.yesterday',
 		'7d': 'dashboard.last7Days',
 		'30d': 'dashboard.last30Days',
 		month: 'dashboard.currentMonth',
+		custom: 'dashboard.customPeriod',
 		all: 'dashboard.viewAllTime',
 	} as const)[period];
 }

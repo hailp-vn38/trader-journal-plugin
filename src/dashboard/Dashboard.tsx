@@ -41,6 +41,8 @@ export function Dashboard({ plugin }: DashboardProps) {
 	const [language, setLanguage] = useState<TraderJournalLanguage>(plugin.settings.language);
 	const [journalType, setJournalType] = useState<TradeJournalType>('live');
 	const [period, setPeriod] = useState<DashboardPeriod>('30d');
+	const [customDateFrom, setCustomDateFrom] = useState(() => formatDateInput(new Date()));
+	const [customDateTo, setCustomDateTo] = useState(() => formatDateInput(new Date()));
 	const [symbol, setSymbol] = useState('');
 	const [recentTradeFilters, setRecentTradeFilters] = useState<RecentTradeFilterState>(() => ({
 		...DEFAULT_RECENT_TRADE_FILTERS,
@@ -63,9 +65,15 @@ export function Dashboard({ plugin }: DashboardProps) {
 		() => getDashboardSymbols(journalData.trades, journalData.plans, journalType),
 		[journalData.plans, journalData.trades, journalType],
 	);
+	const dashboardFilters = useMemo(() => ({
+		journalType,
+		period,
+		symbol,
+		...(period === 'custom' ? { dateFrom: customDateFrom, dateTo: customDateTo } : {}),
+	}), [customDateFrom, customDateTo, journalType, period, symbol]);
 	const trades = useMemo(
-		() => getDashboardTrades(journalData.trades, { journalType, period, symbol }),
-		[journalData.trades, journalType, period, symbol],
+		() => getDashboardTrades(journalData.trades, dashboardFilters),
+		[dashboardFilters, journalData.trades],
 	);
 	const metrics = useMemo(() => getDashboardMetrics(trades), [trades]);
 	const recentSetupOptions = useMemo(
@@ -167,12 +175,35 @@ export function Dashboard({ plugin }: DashboardProps) {
 					<label>
 						<span>{tr('dashboard.period')}</span>
 						<select value={period} onChange={(event) => setPeriod(event.target.value as DashboardPeriod)}>
+							<option value="today">{tr('dashboard.today')}</option>
+							<option value="yesterday">{tr('dashboard.yesterday')}</option>
 							<option value="7d">{tr('dashboard.last7Days')}</option>
 							<option value="30d">{tr('dashboard.last30Days')}</option>
 							<option value="month">{tr('dashboard.currentMonth')}</option>
+							<option value="custom">{tr('dashboard.customPeriod')}</option>
 							<option value="all">{tr('dashboard.viewAllTime')}</option>
 						</select>
 					</label>
+					{period === 'custom' ? (
+						<>
+							<label>
+								<span>{tr('dashboard.dateFrom')}</span>
+								<input
+									type="date"
+									value={customDateFrom}
+									onChange={(event) => setCustomDateFrom(event.target.value)}
+								/>
+							</label>
+							<label>
+								<span>{tr('dashboard.dateTo')}</span>
+								<input
+									type="date"
+									value={customDateTo}
+									onChange={(event) => setCustomDateTo(event.target.value)}
+								/>
+							</label>
+						</>
+					) : null}
 					<label>
 						<span>{tr('detail.symbol')}</span>
 						<select value={symbol} onChange={(event) => setSymbol(event.target.value)}>
@@ -192,7 +223,7 @@ export function Dashboard({ plugin }: DashboardProps) {
 
 			{journalType === 'live' ? (
 				<ReviewInsights
-					filters={{ journalType, period, symbol }}
+					filters={dashboardFilters}
 					language={language}
 					plugin={plugin}
 					trades={trades}
@@ -326,3 +357,10 @@ function formatJournalDate(value: string, locale: string | undefined): string {
 function formatPercent(value: number): string { return `${value.toFixed(1)}%`; }
 function formatRr(value: number): string { return `${value > 0 ? '+' : ''}${value.toFixed(2)}R`; }
 function getNumberTone(value: number): 'positive' | 'negative' | 'neutral' { return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'; }
+
+function formatDateInput(date: Date): string {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+}

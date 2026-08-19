@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
 	DEFAULT_RECENT_TRADE_FILTERS,
 	filterRecentTrades,
+	getDashboardTrades,
 	getReviewMetrics,
 	getTradePlanLinkMetrics,
 	getUnreviewedClosedLiveTradeCount,
@@ -198,6 +199,33 @@ void test('drills down by review status, mistake, and plan adherence within dash
 		'NQ',
 		'rr-low',
 	), [ignoredPlan, followedFomo]);
+});
+
+void test('filters dashboard trades for today, yesterday, and a custom date range', () => {
+	const todayTrade = createIndexedTrade('today', '2026-08-14', 'win', 1, undefined, 'NQ', 'Journal/today.md');
+	const yesterdayTrade = createIndexedTrade('yesterday', '2026-08-13', 'loss', 1, undefined, 'NQ', 'Journal/yesterday.md');
+	const earlierTrade = createIndexedTrade('earlier', '2026-08-10', 'win', 2, undefined, 'NQ', 'Journal/earlier.md');
+	const futureTrade = createIndexedTrade('future', '2026-08-15', 'win', 1, undefined, 'NQ', 'Journal/future.md');
+	const snapshot = createSnapshot([todayTrade, yesterdayTrade, earlierTrade, futureTrade]);
+	const now = new Date(2026, 7, 14, 12, 0, 0);
+
+	assert.deepEqual(getDashboardTrades(snapshot, {
+		journalType: 'live',
+		period: 'today',
+		symbol: '',
+	}, now), [todayTrade]);
+	assert.deepEqual(getDashboardTrades(snapshot, {
+		journalType: 'live',
+		period: 'yesterday',
+		symbol: '',
+	}, now), [yesterdayTrade]);
+	assert.deepEqual(getDashboardTrades(snapshot, {
+		journalType: 'live',
+		period: 'custom',
+		symbol: '',
+		dateFrom: '2026-08-10',
+		dateTo: '2026-08-13',
+	}, now), [yesterdayTrade, earlierTrade]);
 });
 
 function createReview(
